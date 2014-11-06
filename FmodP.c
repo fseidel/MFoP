@@ -100,8 +100,7 @@ channel* initsound()
   //TODO: set up buffer, open a stream
   int numDevices = Pa_GetDeviceCount();
   printf("Number of audio devices: %d\n", numDevices);
-  //data.rBufToRTData = PaUtil_AllocateMemory(sizeof(OceanWave*) * 256);
-  //PaUtilRingBuffer* rbuf;
+  //ringbuffer stuff goes here
   uint8_t* buf = malloc(16384*sizeof(uint8_t));
   //if(!PaUtilRingBuffer(rbuf, 1, 16384, buf)) exit(1);
   //paStreamParamaters outputParameters;
