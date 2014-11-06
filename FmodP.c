@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <samplerate.h>
-#include "/Users/ford/Development/portaudio/qa/loopback/src/write_wav.h"
+#include <write_wav.h>
 //#include <pa_ringbuffer.h>
 //#include <pa_util.h>
 
