@@ -6,12 +6,6 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <samplerate.h>
-<<<<<<< Updated upstream:FmodP.c
-#include <write_wav.h>
-//#include <pa_ringbuffer.h>
-//#include <pa_util.h>
-=======
->>>>>>> Stashed changes:FmodPFile.c
 
 /*typedef struct{
 
@@ -106,14 +100,9 @@ channel* initsound()
   //TODO: set up buffer, open a stream
   int numDevices = Pa_GetDeviceCount();
   printf("Number of audio devices: %d\n", numDevices);
-<<<<<<< Updated upstream:FmodP.c
-  //ringbuffer stuff goes here
-  uint8_t* buf = malloc(16384*sizeof(uint8_t));
-=======
   //data.rBufToRTData = PaUtil_AllocateMemory(sizeof(OceanWave*) * 256);
   //PaUtilRingBuffer* rbuf;
   //uint8_t* buf = malloc(131072*sizeof(uint8_t));
->>>>>>> Stashed changes:FmodPFile.c
   //if(!PaUtilRingBuffer(rbuf, 1, 16384, buf)) exit(1);
   //paStreamParamaters outputParameters;
   //outputParameters.device = Pa_GetDefaultOutputDevice();
@@ -224,9 +213,9 @@ void stepframe(modfile* m, channel* cp)
   }
   curdata = m->patterns + ((m->patternlist[pattern])*1024) + (16*row);
   //printf("channel 0\n");
-  //processnote(m, &cp[0], curdata);
+  processnote(m, &cp[0], curdata);
   //printf("channel 1\n");
-  processnote(m, &cp[1], curdata + 4);
+  //processnote(m, &cp[1], curdata + 4);
   //printf("channel 2\n");
   //processnote(m, &cp[2], curdata + 8);
   //printf("channel 3\n");
