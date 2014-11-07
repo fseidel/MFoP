@@ -6,21 +6,25 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <samplerate.h>
+<<<<<<< Updated upstream:FmodP.c
 #include <write_wav.h>
 //#include <pa_ringbuffer.h>
 //#include <pa_util.h>
+=======
+>>>>>>> Stashed changes:FmodPFile.c
 
 /*typedef struct{
 
 } pattern;*/
-uint8_t* audiobuf;
+FILE* outfile;
+//uint8_t* audiobuf;
 int pattern;
 int row;
 uint8_t* curdata;
-bool done;
+volatile bool done;
 PaError err;
-PaStream *stream;
-
+PaStream* stream;
+//sample* test;
 static double const PAL_CLOCK = 7093789.2;
 static int const SAMPLE_RATE = 44100;
 
@@ -45,6 +49,7 @@ typedef struct{
   SRC_STATE* converter;
   SRC_DATA* cdata;
   int nsamples;
+  int buffpointer;
 } channel;
 
 typedef struct{
@@ -74,9 +79,9 @@ static int patestCallback(const void *input, void *output,
   for(int i = 0; i < framesPerBuffer; i++)
   {
     stepframe(gm, gcp);
-    printf("called!\n");
+    //printf("called!\n");
   }
-  //if(done) return 1;
+  if(done) return paComplete;
   return 0;
 }
 
@@ -87,28 +92,36 @@ channel* initsound()
   channel* channels = malloc(4*sizeof(channel));
   for(int i = 0; i < 4; i++)
   {
-    channels[i].buffer = malloc(4096*sizeof(uint8_t)); //big enough?
+    channels[i].buffer = malloc(16384*sizeof(uint8_t)); //big enough?
     printf("buffer address: %d\n", channels[i].buffer);
     channels[i].stop = true;
+    channels[i].buffpointer = 0;
     //Do hacky conversion for now
     //channels[i]->converter = src_new (0, 1, &src_error);
     //channels[i]->cdata = malloc(sizeof(SRC_DATA));
   }
-  audiobuf = (channels[0].buffer);
+  //audiobuf = (channels[1].buffer);
   //Driver init
   if(Pa_Initialize() != paNoError) exit(1);
   //TODO: set up buffer, open a stream
   int numDevices = Pa_GetDeviceCount();
   printf("Number of audio devices: %d\n", numDevices);
+<<<<<<< Updated upstream:FmodP.c
   //ringbuffer stuff goes here
   uint8_t* buf = malloc(16384*sizeof(uint8_t));
+=======
+  //data.rBufToRTData = PaUtil_AllocateMemory(sizeof(OceanWave*) * 256);
+  //PaUtilRingBuffer* rbuf;
+  //uint8_t* buf = malloc(131072*sizeof(uint8_t));
+>>>>>>> Stashed changes:FmodPFile.c
   //if(!PaUtilRingBuffer(rbuf, 1, 16384, buf)) exit(1);
   //paStreamParamaters outputParameters;
   //outputParameters.device = Pa_GetDefaultOutputDevice();
   //outputParameters.channelCount = 1;
   //outputParameters.sampleFormat = paUInt8;
-  PaError e = Pa_OpenDefaultStream(&stream, 0, 1, paUInt8, SAMPLE_RATE,
-                              paFramesPerBufferUnspecified,
+  /*PaError e = Pa_OpenDefaultStream(&stream, 0, 1, paUInt8, SAMPLE_RATE, 8192,
+                              NULL, NULL);*/
+  PaError e = Pa_OpenDefaultStream(&stream, 0, 1, paUInt8, SAMPLE_RATE, 64,
                               patestCallback, NULL);
   if(e != paNoError)
   { 
@@ -120,52 +133,79 @@ channel* initsound()
 }
 void processnote(modfile* m, channel* c, uint8_t* data)
 {
-  //printf("%x\n", *data);
-  //printf("%x\n", *(data+1));
-  //printf("%x\n", *(data+2));
-  //printf("%x\n", *(data+3));
-  uint8_t tempsam = (((*data))&0xF0) | ((*(data+2)>>4)&0x0F);
-  //printf("tempsam: %d\n", tempsam);
-  if(tempsam)
+  printf("data 1: %x\n", *data);
+  printf("data 2: %x\n", *(data+1));
+  printf("data 3: %x\n", *(data+2));
+  printf("data 4: %x\n", *(data+3));
+  uint8_t tempsam = ((((*data))&0xF0) | ((*(data+2)>>4)&0x0F))-1;
+  printf("tempsam: %d\n", tempsam+1);
+  if(tempsam != 0)
   {
     c->stop = false;
     c->repeat = false;
     c->index = 0;
     c->sample = m->samples[tempsam];
     uint16_t period = (((uint16_t)((*data)&0x0F))<<8) | *(data+1); 
+    //period = 64;
+    printf("period: %d\n", period);
     //THIS NEEDS TO BE CHANGED WHEN EFFECTS ARE IMPLEMENTED
     c->rate = PAL_CLOCK/(2*period);
-    c->nsamples = SAMPLE_RATE/c->rate; //48000 = default output rate
+    c->nsamples = SAMPLE_RATE/(c->rate); //48000 = default output rate
+    //c->nsamples = 1;
   }
   //printf("nsamples: %d\n", c->nsamples);
   //printf("secsperrow: %f\n", m->secsperrow);
   //write to audio buffer
   //printf("chunk size: %d\n", (int)((m->secsperrow)*c->rate));
-  for(int i = 0; i < (int)((m->secsperrow)*c->rate); i++)
+stop:
+  if(c->stop)
   {
-    //LOL, save hard stuff for later
-    //resample in a stupid and hacky way
-    //uint8_t* tempbuffer = c->buffer;
-    for(int j = 0; j < c->nsamples; j++)
+    for(int i = 0; i < (int)(SAMPLE_RATE*(m->secsperrow)); i++)
     {
-      *(c->buffer+j) = *(c->sample->sampledata + c->index);
+      //printf("%d\n", (int)(SAMPLE_RATE*(m->secsperrow)));
+      //*(c->buffer+i+c->buffpointer) = 0x00;
+      putc(0x00, outfile);
+      //fwrite(gcp[0].buffer, 1, 16384, outfile);
+      //if(c->buffpointer >= 16384) c->buffpointer = 0;
     }
-    c->index++;
-    //repeating sample
-    if(c->repeat && c->index >= (c->sample->repeatlength)*2)
+  }
+  else
+  {
+    for(int i = 0; i < (int)((m->secsperrow)*c->rate); i++)
     {
-      c->index = c->sample->repeatpoint;
-    }
-    //nonrepeating sample
-    else if(c->index >= (c->sample->length)*2)
-    {
-      //printf("here\n");
-      if(c->sample->repeatlength > 1 )
+      //LOL, save hard stuff for later
+      //resample in a stupid and hacky way
+      //uint8_t* tempbuffer = c->buffer;
+      for(int j = 0; j < c->nsamples; j++)
+      {
+        //*(c->buffer+j+c->buffpointer) = *(c->sample->sampledata + c->index);
+        fwrite((c->sample->sampledata + c->index), 1, 1, outfile);
+        //if(c->buffpointer >= 16384) c->buffpointer = 0;
+        //printf("%d", *(c->sample->sampledata + c->index));
+        //*(out+j) = *(c->sample->sampledata + c->index);
+      }
+      c->index++;
+
+      //repeating sample
+      if(c->repeat && (c->index >= (c->sample->repeatlength)*2))
       {
         c->index = c->sample->repeatpoint;
-        c->repeat = true;
       }
-      else c->stop = true;
+      //nonrepeating sample
+      else if(c->index >= (c->sample->length)*2)
+      {
+        //printf("here\n");
+        if(c->sample->repeatlength > 2 )
+        {
+          c->index = c->sample->repeatpoint;
+          c->repeat = true;
+        }
+        else
+        {
+          c->stop = true;
+          goto stop;
+        }
+      }
     }
   }
 }
@@ -183,31 +223,15 @@ void stepframe(modfile* m, channel* cp)
     return;
   }
   curdata = m->patterns + ((m->patternlist[pattern])*1024) + (16*row);
-  printf("channel 0\n");
-  processnote(m, &cp[0], curdata);
-  printf("channel 1\n");
+  //printf("channel 0\n");
+  //processnote(m, &cp[0], curdata);
+  //printf("channel 1\n");
   processnote(m, &cp[1], curdata + 4);
-  printf("channel 2\n");
-  processnote(m, &cp[2], curdata + 8);
-  printf("channel 3\n");
-  processnote(m, &cp[3], curdata + 12);
-  //usleep(20000*(m->speed)); //20000 microseconds = 1/50 second
-
-  /*for(int i = 0; i < m->songlength; i++)
-  {
-    for(int j = 0; j < 64; j++)
-    {
-      curdata = m->patterns + ((m->patternlist[i])*1024) + (16*j);
-      printf("channel 0\n");
-      processnote(m, &cp[0], curdata);
-      printf("channel 1\n");
-      processnote(m, &cp[1], curdata + 4);
-      printf("channel 2\n");
-      processnote(m, &cp[2], curdata + 8);
-      printf("channel 3\n");
-      processnote(m, &cp[3], curdata + 12);
-      //usleep(20000*(m->speed)); //20000 microseconds = 1/50 second
-    }*/
+  //printf("channel 2\n");
+  //processnote(m, &cp[2], curdata + 8);
+  //printf("channel 3\n");
+  //processnote(m, &cp[3], curdata + 12);
+  row++;
 }
 
 void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
@@ -226,8 +250,10 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
     memcpy(&(s->length), filearr+43+(30*i), 1);
     memcpy((uint8_t*)&(s->length)+1, filearr+42+(30*i), 1);
     printf("%s\n", s->name);
+    printf("length: %d\n", s->length);
     if (s->length != 0)
     {
+      //printf("%s\n", );
       //printf("%d\n", 2*(int)(s->length));
       s->finetune = filearr[44 + 30 * i]&0x0F;
       //printf("copied finetune\n");
@@ -245,7 +271,18 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
       memcpy(s->sampledata, filearr+start, copylen);
       s->sampledata = filearr+start;
       start += copylen;
+      if(i == 4)
+      {
+        printf("sample data for sample %d:\n", i);
+        FILE* smd = fopen("sample.raw", "wb");
+        for(int j = 0; j < copylen; j++)
+        {
+          fwrite(s->sampledata+j, 1, 1, smd);
+        }
+        fclose(smd);
+      }
     }
+    //test = m->samples[0];
   }
   return;
 }
@@ -274,14 +311,21 @@ modfile* modparse(FILE* f)
   }
   //printf("magic string checked\n");
   m->songlength = filearr[950];
+  printf("songlength: %d\n", m->songlength);
   //printf("about to copy patterns\n");
-  memcpy(&(m->patternlist), filearr+952, 128);
+  memcpy(m->patternlist, filearr+952, 128);
+  printf("patterns:\n");
+  for(int i = 0; i < m->songlength; i++)
+  {
+    printf("%d\n", m->patternlist[i]);
+  }
   //printf("copied pattern table\n");
   int max = 0;
   for(int i = 0; i < 128; i++)
   {
     if(m->patternlist[i] > max) max = m->patternlist[i];
   }
+  printf("max: %d\n", max);
   uint32_t len = (uint32_t)(1024*(max+1)); //1024 = size of pattern
   m->patterns = malloc(len);
   memcpy(m->patterns, filearr+1084, len-1);
@@ -293,7 +337,7 @@ modfile* modparse(FILE* f)
   //m->secsperrow = (1.0/((2.5/(m->tempo))*(m->speed)));
   m->secsperrow = 0.02*(m->speed);
   //printf("secsperrow calculation\n");
-  //printf("secsperrow: %f\n", m->secsperrow);
+  printf("secsperrow: %f\n", m->secsperrow);
   return m;
 }
 
@@ -316,8 +360,26 @@ int main(int argc, char const *argv[])
   printf("%s\n", gm->name);
   gcp = initsound();
   printf("Successfully initialized sound.\n");
-  if(!Pa_StartStream(stream)) printf("failed to start stream\n");
-  Pa_Sleep(50*1000);
+  //FILE* outfile;
+  outfile = fopen("output.raw", "wb");
+  if(outfile == NULL)
+  {
+    printf("Error opening file\n");
+    exit(1);
+  }
+  for(int i = 0; i < 256; i++)
+  {
+    stepframe(gm, gcp);
+  }
+  /*while(!done)
+  {
+    stepframe(gm, gcp);
+  }*/
+  //err = Pa_StartStream(stream);
+  //if(err != paNoError) printf("Failed to start stream. Error code: %d\n", err);
+  //Pa_Sleep(1*1000);
+  //Pa_StopStream(stream);
+  fclose(outfile);
   //stepframe(gm, gcp);
   return 0;
 }
