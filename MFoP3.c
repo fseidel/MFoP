@@ -657,8 +657,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < writesize; i++)
     {
       audiobuf[i*2+offset] = c->resampled[i];
-      //if(audiobuf[i*2+offset+buffstart] > 0.5f)
-        //audiobuf[i*2+offset+buffstart] = 0.0f;
+      if(audiobuf[i*2+offset] >= 0.75f)
+        audiobuf[i*2+offset] = 0.0f;
       //buffstart+=2;
       //count++;
     }
@@ -668,8 +668,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < writesize; i++)
     {
       audiobuf[i*2+offset] += c->resampled[i];
-      //if(audiobuf[i*2+offset+buffstart] > 0.5f)
-        //audiobuf[i*2+offset+buffstart] = 0.0f;
+      if(audiobuf[i*2+offset] >= 0.75f)
+        audiobuf[i*2+offset] = 0.0f;
       //count++;
     }
   }
