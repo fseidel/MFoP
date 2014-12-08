@@ -30,7 +30,7 @@ PaError pa_error;
 uint8_t globaltick;
 
 typedef struct {
-  uint8_t name[23];
+  char name[23];
   uint16_t length;
   int8_t finetune;
   uint8_t volume;
@@ -73,7 +73,7 @@ typedef struct{
 } channel;
 
 typedef struct{
-  uint8_t name[21];
+  char name[21];
   uint8_t* patterns;
   uint8_t songlength;
   sample* samples[31];
@@ -81,7 +81,7 @@ typedef struct{
   uint32_t speed;
   uint16_t tempo;
   double secsperrow;
-  uint8_t magicstring[4];
+  char magicstring[4];
 } modfile;
 
 modfile* gm;
@@ -218,9 +218,9 @@ void preprocesseffects(uint8_t* data)
   }
 }
 
-void processnoteeffects(modfile* m, channel* c, uint8_t* data)
+void processnoteeffects(channel* c, uint8_t* data)
 {
-  uint16_t tempperiod = (((uint16_t)((*data)&0x0F))<<8) | *(data+1);
+  //uint16_t tempperiod = (((uint16_t)((*data)&0x0F))<<8) | *(data+1);
   uint8_t tempeffect = *(data+2)&0x0F;
   uint8_t effectdata = *(data+3);
   switch(tempeffect)
@@ -234,7 +234,7 @@ void processnoteeffects(modfile* m, channel* c, uint8_t* data)
         c->volstep = 0;
         c->freqchange = true;
         int base = findperiod(c->period);
-        if(base = -1)
+        if(base == -1)
         {
           c->doarp = false;
           break;
@@ -452,7 +452,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       if(tempsam)
       {
         tempsam--;
-        sample* prevsam = c->sample;
+        //sample* prevsam = c->sample;
         c->sample = m->samples[tempsam];
         c->volume = (double)c->sample->volume / 64.0;
         //if(c->sample != prevsam) c->volume = (double)c->sample->volume / 64.0;
@@ -483,18 +483,18 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       if(*(data+3) > 64) c->volume = 1.0;
       else c->volume = (*(data+3)) / 64.0;
     }*/
-    if(c->period == NULL || c->sample == NULL || !c->sample->length)
+    if(c->period == 0 || c->sample == NULL || !c->sample->length)
     {
       c->stop = true;
     }
 
-    processnoteeffects(m, c, data);
+    processnoteeffects(c, data);
   }
 
   double conv_ratio;
 
   //RESAMPLE PER TICK
-  int count = 0;
+  //int count = 0;
   //int buffstart = 0;
 
   int writesize = SAMPLE_RATE*0.02;
@@ -582,9 +582,9 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     c->cdata->src_ratio = conv_ratio;
     c->cdata->input_frames = 0.02*rate;
     c->offset += rate*0.02 - (uint32_t)(rate*0.02);
-    uint32_t restore = c->index;
-    bool restrepeat = c->repeat;
-    bool reststop = c->stop;
+    //uint32_t restore = c->index;
+    //bool restrepeat = c->repeat;
+    //bool reststop = c->stop;
 
     for(int i = 0; i < 0.02*rate; i++)
     {
@@ -726,7 +726,7 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
       int copylen = (s->length)*2;
       s->inverted = false;
       s->sampledata = malloc(copylen*sizeof(float));
-      floatncpy(s->sampledata, filearr+start, copylen);
+      floatncpy(s->sampledata, (int8_t*)(filearr+start), copylen);
       start += copylen;
     }
   }
@@ -786,14 +786,14 @@ modfile* modparse(FILE* f)
     filearr[seek++] = (uint8_t)c;
   }
   modfile* m = malloc(sizeof(modfile));
-  strncpy(&(m->name), filearr, 20);
+  strncpy((char*)m->name, (char*)filearr, 20);
   m->name[20] = '\x00';
   printf("%s\n", m->name);
-  memcpy(&(m->magicstring), filearr+1080, 4);
-  if(!strcmp(&(m->magicstring), "M.K.") && !strcmp(&(m->magicstring), "4CHN")) 
+  memcpy(m->magicstring, filearr+1080, 4);
+  if(!strcmp(m->magicstring, "M.K.") && !strcmp(m->magicstring, "4CHN")) 
   { 
     printf("magic string check failed\n");
-    m->songlength = -1;
+    m->songlength = 0;
     return m;
   }
   m->songlength = filearr[950];
@@ -827,12 +827,15 @@ static int pacallback(const void* inputBuffer, void* outputBuffer,
                       PaStreamCallbackFlags statusFlags,
                       void* userdata)
 {
-
+  (void) inputBuffer;
+  (void) timeInfo;
+  (void) statusFlags;
+  (void) userdata;
   stepframe(gm, gcp);
   float* out = (float*) outputBuffer;
   float* in = audiobuf;
 
-  for(unsigned int i = 0; i < SAMPLE_RATE*0.02; i++)
+  for(unsigned int i = 0; i < framesPerBuffer; i++)
   {
     *out++ = *in++;
     *out++ = *in++;
@@ -858,7 +861,7 @@ int main(int argc, char const *argv[])
   }
   gm = modparse(f);
   //printf("finished parsing modfile\n");
-  if(gm->songlength < 0)
+  if(gm->songlength == 0)
   {
     printf("Invalid modfile. Error %d\n", gm->songlength);
     return 1;
