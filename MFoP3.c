@@ -110,7 +110,6 @@ double calcrate(uint16_t period, int8_t finetune)
   return dr;
 }
 
-//modified from http://forum.audacityteam.org/viewtopic.php?f=21&t=62000
 void floatncpy(float* dest, int8_t* src, int n)
 {
   for(int i = 0; i < n; i++)
@@ -173,7 +172,6 @@ channel* initsound()
     channels[i].cdata->data_out = channels[i].resampled;
     channels[i].cdata->output_frames = SAMPLE_RATE*0.02;
     channels[i].cdata->end_of_input = 0;
-    //channels[i].cdata->src_ratio = 1.0;
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
@@ -184,7 +182,6 @@ channel* initsound()
     printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
     abort();
   }
-
 
   return channels;
 }
@@ -210,7 +207,7 @@ void preprocesseffects(uint8_t* data)
 
     case 0x0B: //position jump
       //avoid infinite loop (This is a bad idea with file out)
-      if(effectdata) pattern = effectdata;
+      pattern = effectdata;
       break;
 
     default:
@@ -240,11 +237,11 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
         }
         c->arp[0] = c->period;
-        printf("ARP0: %d\n", (int)c->arp[0]);
+        //printf("ARP0: %d\n", (int)c->arp[0]);
         c->arp[1] = periods[base+((effectdata>>4)&0x0F)];
-        printf("ARP1: %d\n", (int)c->arp[1]);
+        //printf("ARP1: %d\n", (int)c->arp[1]);
         c->arp[2] = periods[base+(effectdata&0x0F)];
-        printf("ARP2: %d\n", (int)c->arp[2]);
+        //printf("ARP2: %d\n", (int)c->arp[2]);
         c->effect_timer = 1;
       }
       break;
@@ -460,29 +457,18 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
       if(period)
       {
-        //c->prevperiod = c->period;
         c->period = period;
         c->portdest = c->period;
-        //c->prevrate = c->rate;
-        //c->rate = calcrate(c->period, c->sample->finetune);
       }
       c->stop = false;
       c->repeat = false;
       c->index = 0;
 
-      //c->volume = (double)c->sample->volume / 64.0;
       c->volstep = 0;
       c->finetune = c->sample->finetune;
       c->effect_timer = 0;
-      //c->volstep = 0;
     }
-    /*//volume override
-    uint8_t tempeffect = *(data+2)&0x0F;
-    if(tempeffect == 0x0C)
-    {
-      if(*(data+3) > 64) c->volume = 1.0;
-      else c->volume = (*(data+3)) / 64.0;
-    }*/
+
     if(c->period == 0 || c->sample == NULL || !c->sample->length)
     {
       c->stop = true;
@@ -494,8 +480,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   double conv_ratio;
 
   //RESAMPLE PER TICK
-  //int count = 0;
-  //int buffstart = 0;
 
   int writesize = SAMPLE_RATE*0.02;
 
@@ -538,11 +522,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       }
     }
     
-    //conv_ratio = SAMPLE_RATE/c->rate;
-    //c->cdata->src_ratio = conv_ratio;
-    //libsrc_error = src_reset(c->converter);
-    //if(libsrc_error) error(libsrc_error);
-    //printf("Ratio: %f\n", conv_ratio);
     c->volume += (double)c->volstep/64.0;
     if(c->volume < 0.0) c->volume = 0.0;
     else if(c->volume > 1.0) c->volume = 1.0;
@@ -703,11 +682,10 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
     m->samples[i] = s;
     memcpy(&(s->name), filearr+20+(30*i), 22);
     s->name[22] = '\x00';
-    //REQUIRES A LITTLE ENDIAN MACHINE!!!!!
-    //TODO: preprocessor directives for checking endianness
-    //alternative: do stuff with multiplication?????
-    memcpy(&(s->length), filearr+43+(30*i), 1);
-    memcpy((uint8_t*)&(s->length)+1, filearr+42+(30*i), 1);
+
+    s->length = (uint16_t)*(filearr+42+(30*i)) << 8;
+    s->length |= (uint16_t)*(filearr+43+(30*i));
+
     //if(s->name[0]) printf("%s\n", s->name);
     //printf("length: %d\n", s->length);
     if (s->length != 0)
@@ -719,10 +697,13 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
       }
       s->finetune = tempfinetune;
       s->volume = filearr[45 + 30 * i];
-      memcpy(&(s->repeatpoint), filearr+47+(30*i), 1);
-      memcpy((uint8_t*)&(s->repeatpoint)+1, filearr+46+(30*i), 1);
-      memcpy(&(s->repeatlength), filearr+49+(30*i), 1);
-      memcpy((uint8_t*)&(s->repeatlength)+1, filearr+48+(30*i), 1);
+
+      s->repeatpoint = (uint16_t)*(filearr+46+(30*i)) << 8;
+      s->repeatpoint |= (uint16_t)*(filearr+47+(30*i));
+
+      s->repeatlength = (uint16_t)*(filearr+48+(30*i)) << 8;
+      s->repeatlength |= (uint16_t)*(filearr+49+(30*i));
+
       int copylen = (s->length)*2;
       s->inverted = false;
       s->sampledata = malloc(copylen*sizeof(float));
@@ -746,8 +727,7 @@ void stepframe(modfile* m, channel* cp)
     done = true;
     return;
   }
-  //curdata = m->patterns + ((m->patternlist[pattern])*1024) + (16*row);
-  //printf("channel 0\n");
+
   if(globaltick == 0)
   {
     curdata = m->patterns + ((m->patternlist[pattern])*1024) + (16*row);
