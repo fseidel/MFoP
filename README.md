@@ -18,7 +18,7 @@ normal mode
 ```
 MFoP3 [modfile]
 ```
-headpones mode
+headphones mode
 ```
 MFoP3 [modfile] -h
 ```
