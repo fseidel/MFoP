@@ -29,6 +29,10 @@ PaStream* stream;
 PaError pa_error;
 uint8_t globaltick;
 
+static int (*callback)(const void*, void*, unsigned long,
+                      const PaStreamCallbackTimeInfo*,
+                      PaStreamCallbackFlags, void*);
+
 typedef struct {
   char name[23];
   uint16_t length;
@@ -52,7 +56,6 @@ typedef struct{
   uint32_t increment;
   bool repeat;
   bool stop;
-  bool freqchange;
   bool doarp;
   bool doport;
   bool targetedport;
@@ -87,7 +90,13 @@ typedef struct{
 modfile* gm;
 channel* gcp;
 
-static int pacallback(const void* inputBuffer, void* outputBuffer,
+static int standardcallback(const void* inputBuffer, void* outputBuffer,
+                      unsigned long framesPerBuffer,
+                      const PaStreamCallbackTimeInfo* timeInfo,
+                      PaStreamCallbackFlags statusFlags,
+                      void* userdata);
+
+static int headphonecallback(const void* inputBuffer, void* outputBuffer,
                       unsigned long framesPerBuffer,
                       const PaStreamCallbackTimeInfo* timeInfo,
                       PaStreamCallbackFlags statusFlags,
@@ -95,27 +104,22 @@ static int pacallback(const void* inputBuffer, void* outputBuffer,
 
 int findperiod(uint16_t period)
 {
-  for(int i = 0; i < 36; i++)
-  {
+  for(int i = 0; i < 36; i++) 
     if(periods[i] == period) return i;
-  }
   printf("PERIOD TABLE LOOKUP ERROR: %d\n", period);
   return -1;
 }
 
 double calcrate(uint16_t period, int8_t finetune)
 {
-  double dr = pow(FINETUNE_BASE, (double)finetune)
-      * PAL_CLOCK/(2.0*(double)period);
-  return dr;
+  return pow(FINETUNE_BASE, (double)finetune)
+          * PAL_CLOCK/(2.0*(double)period);
 }
 
 void floatncpy(float* dest, int8_t* src, int n)
 {
   for(int i = 0; i < n; i++)
-  {
     dest[i] = ((float)src[i])/128.0f;
-  }
 }
 
 void error(int err)
@@ -146,7 +150,6 @@ channel* initsound()
     channels[i].resampled = malloc(0.02*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
     channels[i].repeat = false;
-    channels[i].freqchange = false;
     channels[i].arp = malloc(3*sizeof(uint16_t));
     channels[i].doarp = false;
     channels[i].doport = false;
@@ -175,7 +178,7 @@ channel* initsound()
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
-                                  SAMPLE_RATE*0.02, pacallback,
+                                  SAMPLE_RATE*0.02, callback,
                                   audiobuf);
   if(pa_error != paNoError)
   {
@@ -217,7 +220,6 @@ void preprocesseffects(uint8_t* data)
 
 void processnoteeffects(channel* c, uint8_t* data)
 {
-  //uint16_t tempperiod = (((uint16_t)((*data)&0x0F))<<8) | *(data+1);
   uint8_t tempeffect = *(data+2)&0x0F;
   uint8_t effectdata = *(data+3);
   switch(tempeffect)
@@ -229,7 +231,6 @@ void processnoteeffects(channel* c, uint8_t* data)
         c->doarp = true;
         c->doport = 0;
         c->volstep = 0;
-        c->freqchange = true;
         int base = findperiod(c->period);
         if(base == -1)
         {
@@ -377,10 +378,7 @@ void processnoteeffects(channel* c, uint8_t* data)
         case 0x50: //set finetune
         {
           int8_t tempfinetune = effectdata & 0x0F;
-          if(tempfinetune > 0x07)
-          {
-            tempfinetune |= 0xF0;
-          }
+          if(tempfinetune > 0x07) tempfinetune |= 0xF0;
           c->finetune = tempfinetune;
           break;
         }
@@ -452,7 +450,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
         //sample* prevsam = c->sample;
         c->sample = m->samples[tempsam];
         c->volume = (double)c->sample->volume / 64.0;
-        //if(c->sample != prevsam) c->volume = (double)c->sample->volume / 64.0;
       }
       //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
       if(period)
@@ -470,9 +467,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     }
 
     if(c->period == 0 || c->sample == NULL || !c->sample->length)
-    {
       c->stop = true;
-    }
 
     processnoteeffects(c, data);
   }
@@ -487,11 +482,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
 
   if(c->effect_timer == 2)
   {
-    if(c->doarp)
-    {
-      //c->rate = calcrate(c->arp[outer%3], c->sample->finetune);
-      c->period = c->arp[globaltick%3];
-    }
+    if(c->doarp) c->period = c->arp[globaltick%3];
     else if(c->doport)
     {   
       if(c->targetedport)
@@ -545,11 +536,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     c->cdata->input_frames = 0.02*SAMPLE_RATE;
     //c->rate = SAMPLE_RATE;
     for(int i = 0; i < 0.02*SAMPLE_RATE; i++)
-    {
-      //printf("2: SILENCE TRIGGERED ON ROW %d, PATTERN %d\n", row, pattern);
-      //exit(1);
       c->buffer[i] = 0.0f;
-    }
   }
   //write non-empty frame to buffer to be interpolated
   else
@@ -560,10 +547,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     if(libsrc_error) error(libsrc_error);
     c->cdata->src_ratio = conv_ratio;
     c->cdata->input_frames = 0.02*rate;
+    //add fractional part of rate calculation to account for error
     c->offset += rate*0.02 - (uint32_t)(rate*0.02);
-    //uint32_t restore = c->index;
-    //bool restrepeat = c->repeat;
-    //bool reststop = c->stop;
 
     for(int i = 0; i < 0.02*rate; i++)
     {
@@ -587,14 +572,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
         {
           //float last = c->buffer[i];
           for(int j = i+1; j < 0.02*rate; j++)
-          {
-            //printf("1: SILENCE TRIGGERED ON ROW %d, PATTERN %d, OFFSET %d, OVERWRITE %d\n", row, pattern, offset, overwrite);
-            //exit(1);
             c->buffer[j] = 0.0f;
-          }
           c->stop = true;
-          //c->index -= OVERSAMPLE;
-          //c->index += offset;
           break;
         }
         //c->index = restore;
@@ -613,14 +592,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   
   if(c->cdata->output_frames_gen != c->cdata->output_frames)
   {
-    /*printf("INSUFFICIENT OVERSAMPLE: \n");
-    printf("Expected: %d\n", c->cdata->output_frames);
-    printf("Generated %d\n", c->cdata->output_frames_gen);*/
-    if(2*c->cdata->output_frames_gen <= c->cdata->output_frames)
-    {
-      printf("WEIRD PERIOD THING\n");
-      abort();
-    }
     for(int k = c->cdata->output_frames_gen; k < c->cdata->output_frames; k++)
     {
       c->resampled[k] =
@@ -630,7 +601,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   }
 
   //WRITE TO MIXING BUFFER
-  //printf("BUFFER START: %d\n", buffstart);
   if(overwrite)
   {
     for(int i = 0; i < writesize; i++)
@@ -638,8 +608,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       audiobuf[i*2+offset] = c->resampled[i];
       if(audiobuf[i*2+offset] >= 0.75f)
         audiobuf[i*2+offset] = 0.0f;
-      //buffstart+=2;
-      //count++;
     }
   }
   else
@@ -649,11 +617,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       audiobuf[i*2+offset] += c->resampled[i];
       if(audiobuf[i*2+offset] >= 0.75f)
         audiobuf[i*2+offset] = 0.0f;
-      //count++;
     }
   }
-  //buffstart+=2*writesize;
-  //c->prevrate = c->rate;
 
   c->prevperiod = c->period;
   /*printf("period: %d\n", c->period);
@@ -665,7 +630,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
 
   //if(outer == 5) exit(0);
   //PAY ATTENTION TO THIS
-  //c->freqchange = false;
 
   if(globaltick == m->speed - 1)
   {
@@ -801,7 +765,7 @@ modfile* modparse(FILE* f)
   return m;
 }
 
-static int pacallback(const void* inputBuffer, void* outputBuffer,
+static int standardcallback(const void* inputBuffer, void* outputBuffer,
                       unsigned long framesPerBuffer,
                       const PaStreamCallbackTimeInfo* timeInfo,
                       PaStreamCallbackFlags statusFlags,
@@ -826,6 +790,33 @@ static int pacallback(const void* inputBuffer, void* outputBuffer,
   return 0;
 }
 
+static int headphonecallback(const void* inputBuffer, void* outputBuffer,
+                      unsigned long framesPerBuffer,
+                      const PaStreamCallbackTimeInfo* timeInfo,
+                      PaStreamCallbackFlags statusFlags,
+                      void* userdata)
+{
+  (void) inputBuffer;
+  (void) timeInfo;
+  (void) statusFlags;
+  (void) userdata;
+  stepframe(gm, gcp);
+  float* out = (float*) outputBuffer;
+  float* in = audiobuf;
+
+  for(unsigned int i = 0; i < framesPerBuffer; i++)
+  {
+    float l = *in++;
+    float r = *in++;
+    *out++ = l+0.30f*r;
+    *out++ = r+0.30f*l;
+  }
+
+  (curbuf == 1)?(curbuf = 0):(curbuf = 1);
+  audiobuf = buffs[curbuf];
+  return 0;
+}
+
 int main(int argc, char const *argv[])
 {
   if(argc < 2)
@@ -833,6 +824,8 @@ int main(int argc, char const *argv[])
     printf("Please specify a valid mod file.\n");
     return 1;
   }
+  if(argc > 2 && strcmp(argv[2], "-h") == 0) callback = headphonecallback;
+  else callback = standardcallback;
   FILE* f = fopen(argv[1], "r");
   if(f == NULL)
   {
@@ -847,7 +840,6 @@ int main(int argc, char const *argv[])
     return 1;
   }
   fclose(f);
-  //printf("%s\n", gm->name);
   gcp = initsound();
   //printf("Successfully initialized sound.\n");
 
