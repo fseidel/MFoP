@@ -456,19 +456,19 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       {
         c->period = period;
         c->portdest = c->period;
+        c->stop = false;
+        c->repeat = false;
+        c->index = 0;
       }
-      c->stop = false;
-      c->repeat = false;
-      c->index = 0;
-
-      c->volstep = 0;
+      
       c->finetune = c->sample->finetune;
-      c->effect_timer = 0;
     }
 
     if(c->period == 0 || c->sample == NULL || !c->sample->length)
       c->stop = true;
 
+    c->volstep = 0;
+    c->effect_timer = 0;
     processnoteeffects(c, data);
   }
 
