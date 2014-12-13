@@ -28,6 +28,10 @@ uint8_t curbuf;
 PaStream* stream;
 PaError pa_error;
 uint8_t globaltick;
+bool patternset;
+uint8_t delcount;
+bool delset;
+bool inrepeat;
 
 static int (*callback)(const void*, void*, unsigned long,
                       const PaStreamCallbackTimeInfo*,
@@ -130,7 +134,6 @@ void error(int err)
 
 channel* initsound()
 {
-  globaltick = 0;
   pa_error = Pa_Initialize();
   if(pa_error != paNoError)
   {
@@ -175,6 +178,12 @@ channel* initsound()
     channels[i].cdata->data_out = channels[i].resampled;
     channels[i].cdata->output_frames = SAMPLE_RATE*0.02;
     channels[i].cdata->end_of_input = 0;
+    row = 0;
+    pattern = 0;
+    delset = false;
+    inrepeat = false;
+    delcount = 0;
+    globaltick = 0;
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
@@ -203,14 +212,15 @@ void preprocesseffects(uint8_t* data)
       gm->tempo = 125/(gm->speed);
       break;
 
-    case 0x0D:
-      pattern++;
-      row = effectdata-1;
+    case 0x0D: //WHY IS THIS IN DECIMAL???
+      if(!patternset) pattern++;
+      row = (effectdata>>4)*10+(effectdata&0x0F) - 1;
       break;
 
     case 0x0B: //position jump
       //avoid infinite loop (This is a bad idea with file out)
       pattern = effectdata;
+      patternset = true;
       break;
 
     default:
@@ -419,6 +429,8 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
 
         case 0xE0: //delay pattern x notes
+          if(!delset) delcount = effectdata&0x0F;
+          delset = true;
           break;
 
         case 0xF0: //invert loop (x = speed)
@@ -442,7 +454,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   {
     uint16_t period = (((uint16_t)((*data)&0x0F))<<8) | (uint16_t)(*(data+1));
     uint8_t tempsam = ((((*data))&0xF0) | ((*(data+2)>>4)&0x0F));
-    if(period || tempsam)
+    if((period || tempsam) && !inrepeat)
     {
       if(tempsam)
       {
@@ -699,8 +711,9 @@ void stepframe(modfile* m, channel* cp)
     preprocesseffects(curdata + 4);
     preprocesseffects(curdata + 8);
     preprocesseffects(curdata + 12);
+    patternset = false;
   }
-
+  //curdata = m->patterns + ((m->patternlist[pattern])*1024) + (16*row);
   processnote(m, &cp[0], curdata, 0, true);
   //printf("channel 1\n");
   processnote(m, &cp[1], curdata + 4, 1, true);
@@ -708,13 +721,22 @@ void stepframe(modfile* m, channel* cp)
   processnote(m, &cp[2], curdata + 8, 1, false);
   //printf("channel 3\n");
   processnote(m, &cp[3], curdata + 12, 0, false);
-
   //fwrite(audiobuf, sizeof(float), SAMPLE_RATE*gm->secsperrow*2, outfile);
   globaltick++;
   if(globaltick == m->speed)
   {
+    if(delcount)
+    {
+      inrepeat = true;
+      delcount--;
+    }
+    else
+    {
+      delset = false;
+      inrepeat = false;
+      row++;
+    }
     globaltick = 0;
-    row++;
   }
 }
 
@@ -841,6 +863,7 @@ int main(int argc, char const *argv[])
   }
   fclose(f);
   gcp = initsound();
+  patternset = false;
   //printf("Successfully initialized sound.\n");
 
   pa_error = Pa_StartStream(stream);
