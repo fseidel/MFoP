@@ -88,7 +88,7 @@ typedef struct{
   uint32_t speed;
   uint16_t tempo;
   double secsperrow;
-  char magicstring[4];
+  char magicstring[5];
 } modfile;
 
 modfile* gm;
@@ -114,10 +114,10 @@ int findperiod(uint16_t period)
   return -1;
 }
 
-double calcrate(uint16_t period, int8_t finetune)
+static inline double calcrate(uint16_t period, int8_t finetune)
 {
-  return pow(FINETUNE_BASE, (double)finetune)
-          * PAL_CLOCK/(2.0*(double)period);
+  return PAL_CLOCK/
+    (2.0*round((double)period*pow(FINETUNE_BASE, -(double)finetune)));
 }
 
 void floatncpy(float* dest, int8_t* src, int n)
@@ -204,24 +204,27 @@ void preprocesseffects(uint8_t* data)
   uint8_t effectdata = *(data+3);
   switch(tempeffect)
   {
-    case 0x0F:
-      if(effectdata > 0x20 || effectdata == 0) break;
-      gm->speed = effectdata;
-      //printf("Speed: %d\n", gm->speed);
-      gm->secsperrow = 0.02*gm->speed;
-      gm->tempo = 125/(gm->speed);
+    case 0x0B: //position jump
+      pattern = effectdata;
+      patternset = true;
       break;
 
-    case 0x0D: //WHY IS THIS IN DECIMAL???
+    case 0x0D: //row jump
       if(!patternset) pattern++;
       row = (effectdata>>4)*10+(effectdata&0x0F) - 1;
       break;
 
-    case 0x0B: //position jump
-      //avoid infinite loop (This is a bad idea with file out)
-      pattern = effectdata;
-      patternset = true;
+    case 0x0F:
+      if(effectdata == 0) break;
+      if(effectdata >= 0x10) break;
+      else
+      {
+        gm->speed = effectdata;
+        //printf("Speed: %d\n", gm->speed);
+        gm->secsperrow = 0.02*gm->speed;
+        gm->tempo = 125/(gm->speed);
       break;
+      }
 
     default:
       break;
@@ -402,6 +405,7 @@ void processnoteeffects(channel* c, uint8_t* data)
         //There's no effect 0xE8 (is 8 evil or something?)
 
         case 0x90: //retrigger note + x vblanks (ticks)
+          c->retrig = effectdata&0x0F;
           break;
 
         case 0xA0: //fine volume slide up (add x to volume)
@@ -483,6 +487,12 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     c->effect_timer = 0;
     processnoteeffects(c, data);
   }
+  if(c->retrig && globaltick == c->retrig-1)
+  {
+    c->index = 0;
+    c->stop = false;
+    c->repeat = false;
+  }
 
   double conv_ratio;
 
@@ -560,7 +570,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     c->cdata->src_ratio = conv_ratio;
     c->cdata->input_frames = 0.02*rate;
     //add fractional part of rate calculation to account for error
-    c->offset += rate*0.02 - (uint32_t)(rate*0.02);
+    c->offset += rate*0.02 - (double)(uint32_t)(rate*0.02);
 
     for(int i = 0; i < 0.02*rate; i++)
     {
@@ -647,6 +657,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   {
     c->doport = false;
     c->effect_timer = 0;
+    c->retrig = 0;
   }
 }
 
@@ -756,6 +767,7 @@ modfile* modparse(FILE* f)
   m->name[20] = '\x00';
   printf("%s\n", m->name);
   memcpy(m->magicstring, filearr+1080, 4);
+  m->magicstring[4] = '\x00';
   if(!strcmp(m->magicstring, "M.K.") && !strcmp(m->magicstring, "4CHN")) 
   { 
     printf("magic string check failed\n");
@@ -778,7 +790,7 @@ modfile* modparse(FILE* f)
   //printf("max: %d\n", max);
   uint32_t len = (uint32_t)(1024*(max+1)); //1024 = size of pattern
   m->patterns = malloc(len);
-  memcpy(m->patterns, filearr+1084, len-1);
+  memcpy(m->patterns, filearr+1084, len);
   sampleparse(m, filearr, len+1084);
   m->speed = 6; //default speed = 6
   m->tempo = 125/(m->speed);
@@ -809,7 +821,8 @@ static int standardcallback(const void* inputBuffer, void* outputBuffer,
 
   (curbuf == 1)?(curbuf = 0):(curbuf = 1);
   audiobuf = buffs[curbuf];
-  return 0;
+  if(!done) return 0;
+  return 1;
 }
 
 static int headphonecallback(const void* inputBuffer, void* outputBuffer,
@@ -836,7 +849,8 @@ static int headphonecallback(const void* inputBuffer, void* outputBuffer,
 
   (curbuf == 1)?(curbuf = 0):(curbuf = 1);
   audiobuf = buffs[curbuf];
-  return 0;
+  if(!done) return 0;
+  return 1;
 }
 
 int main(int argc, char const *argv[])
