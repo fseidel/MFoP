@@ -357,22 +357,6 @@ void processnoteeffects(channel* c, uint8_t* data)
       c->stop = false;
       break;
 
-    case 0x04: //vibrato
-      c->dotrem = false; 
-      c->targetedport = false;
-      c->doarp = false;
-      c->doport = false;
-      c->period = c->portdest;
-      c->dovib = true;
-      c->dotrem = false;
-      if(effectdata)
-      {
-        c->vibdepth = effectdata & 0x0F;
-        c->vibspeed = (effectdata >> 4) & 0xF0;
-      }
-      if(!(c->vibwave&4)) c->vibpos = 0;
-      break;
-
     case 0x05: //tone portamento + volume slide
       c->dovib = false;
       c->dotrem = false; 
@@ -391,6 +375,31 @@ void processnoteeffects(channel* c, uint8_t* data)
       break;
 
     case 0x06: //vibrato + volume slide
+      //cancel slide
+      if(!effectdata) c->volstep = 0;
+      //slide up
+      else if(effectdata&0xF0) c->volstep = (effectdata>>4) & 0x0F;
+      //slide down
+      else c->volstep = -(int8_t)effectdata;
+      c->fineeffect = false;
+      //exploit fallthrough
+      effectdata = 0;
+      
+    case 0x04: //vibrato
+      c->effect_timer = 1;
+      c->dotrem = false; 
+      c->targetedport = false;
+      c->doarp = false;
+      c->doport = false;
+      //c->period = c->portdest;
+      c->dovib = true;
+      c->dotrem = false;
+      if(effectdata)
+      {
+        c->vibdepth = effectdata & 0x0F;
+        c->vibspeed = (effectdata >> 4) & 0xF0;
+      }
+      if(!(c->vibwave&4)) c->vibpos = 0;
       break;
 
     case 0x07: //tremolo
@@ -637,17 +646,17 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
         else if(c->period < 113) c->period = 113;
       }
     }
-    
+    else if(c->dovib)
+    {
+      c->period += (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos%64]/64;
+      c->vibpos += c->vibspeed;
+    }
     c->volume += (double)c->volstep/64.0;
     if(c->volume < 0.0) c->volume = 0.0;
     else if(c->volume > 1.0) c->volume = 1.0;
     if(c->fineeffect) c->effect_timer = 0;
   }
-  else if(c->dovib)
-  {
-    c->period += c->vibdepth*vibwaves[c->vibwave&3][c->vibpos%64];
-    c->vibpos += c->vibspeed;
-  }
+  
   else if(c->effect_timer == 1) c->effect_timer++;
   //if(c->stop) c->rate = SAMPLE_RATE;
   
