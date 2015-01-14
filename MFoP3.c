@@ -169,7 +169,7 @@ void precalculatetables()
   vibwaves[3] = vibrandom;
   for(int i = 0; i < 64; i++)
   {
-    cursin = sin(i*2*M_PI/64);
+    cursin = sin(i*2*M_PI/64.0);
     vibsine[i] = 64*cursin;
     vibsaw[i] = -64*((i/64.0) - floor((i/64.0) + 0.5));
     cursin = sin((i*2*M_PI+(M_PI/2)/64));
@@ -400,7 +400,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       if(effectdata)
       {
         c->vibdepth = effectdata & 0x0F;
-        c->vibspeed = (effectdata >> 4) & 0xF0;
+        c->vibspeed = (effectdata >> 4) & 0x0F;
       }
       if(!(c->vibwave&4)) c->vibpos = 0;
       break;
@@ -652,8 +652,9 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     }
     else if(c->dovib)
     {
-      c->period += (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos%64]/64;
+      c->period += (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos]/64;
       c->vibpos += c->vibspeed;
+      c->vibpos %= 64;
     }
     c->volume += (double)c->volstep/64.0;
     if(c->volume < 0.0) c->volume = 0.0;
@@ -723,7 +724,24 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       }
     }
     c->index += offset;
-    if(c->doarp) c->period = c->portdest;
+    if(globaltick == gm->speed-1)
+    {
+      if(c->doarp)
+      {
+        c->period = c->portdest;
+        c->doarp = false;
+        //c->index = 0;
+      }
+      else if(c->dovib)
+      {
+        c->period = c->portdest;
+        //c->index = 0;
+      }
+      else if(c->doport && !c->targetedport)
+      {
+        c->portdest = c->period;
+      }
+    }
   }
 
   libsrc_error = src_process(c->converter, c->cdata);
