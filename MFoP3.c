@@ -7,6 +7,7 @@
 #include <samplerate.h>
 #include <math.h>
 #include <portaudio.h>
+#include <time.h>
 
 static double const PAL_CLOCK = 7093789.2;
 static double const SAMPLE_RATE = 44100;
@@ -161,6 +162,7 @@ void precalculatetables()
 {
   //formulas from http://stackoverflow.com/questions/3387159/actionscript-creating-square-triangle-sawtooth-waves-from-math-sin
   double cursin;
+  srand(time(NULL));
   vibwaves[0] = vibsine;
   vibwaves[1] = vibsaw;
   vibwaves[2] = vibsquare;
@@ -172,6 +174,7 @@ void precalculatetables()
     vibsaw[i] = -64*((i/64.0) - floor((i/64.0) + 0.5));
     cursin = sin((i*2*M_PI+(M_PI/2)/64));
     vibsquare[i] = 64*((cursin == 0)?0:cursin/abs(cursin));
+    vibrandom[i] = (int8_t)(rand()%256);
   }
 }
 
@@ -384,7 +387,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       c->fineeffect = false;
       //exploit fallthrough
       effectdata = 0;
-      
+
     case 0x04: //vibrato
       c->effect_timer = 1;
       c->dotrem = false; 
@@ -465,6 +468,7 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
 
         case 0x40: //set vibrato waveform (0 sine, 1 ramp down, 2 square)
+          c->vibwave = effectdata & 0x0F;
           break;
 
         case 0x50: //set finetune
