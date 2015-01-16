@@ -84,16 +84,13 @@ typedef struct{
   bool fineeffect;
   int8_t effect_timer;
   uint16_t period;
-  uint16_t prevperiod;
   int8_t volstep;
   uint16_t* arp;
   uint16_t portdest;
   int8_t portstep;
   uint8_t targstep;
-  uint8_t prevport;
   SRC_STATE* converter;
   SRC_DATA* cdata;
-  int8_t finetune;
   int8_t retrig;
   uint8_t vibspeed;
   uint8_t vibwave;
@@ -207,13 +204,10 @@ channel* initsound()
     channels[i].volstep = 0;
     channels[i].prevrate = 0.0;
     channels[i].period = 0;
-    channels[i].prevperiod = 0;
     channels[i].portdest = 0;
     channels[i].portstep = 0;
     channels[i].targstep = 0;
-    channels[i].prevport = 0;
     channels[i].offset = 0.0;
-    channels[i].finetune = 0;
     channels[i].fineeffect = false;
     channels[i].retrig = 0;
     channels[i].vibwave = 0;
@@ -342,14 +336,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       if(effectdata)
       {
         //c->portdest = c->period;
-        c->period = c->prevperiod;
         c->targstep = effectdata;
-        c->prevport = c->targstep;
-      }
-      else 
-      {
-        c->period = c->prevperiod;
-        //c->targstep = c->prevport;
       }
       c->targetedport = true;
       c->volstep = 0;
@@ -370,9 +357,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       else c->volstep = -(int8_t)effectdata;
       c->effect_timer = 1;
       c->targetedport = true;
-      c->period = c->prevperiod;
       c->doport = true;
-      //c->targstep = c->prevport;
       c->fineeffect = false;
       c->stop = false;
       break;
@@ -475,7 +460,7 @@ void processnoteeffects(channel* c, uint8_t* data)
         {
           int8_t tempfinetune = effectdata & 0x0F;
           if(tempfinetune > 0x07) tempfinetune |= 0xF0;
-          c->finetune = tempfinetune;
+          c->sample->finetune = tempfinetune;
           break;
         }
 
@@ -573,6 +558,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       if(tempsam)
       {
         tempsam--;
+        c->offset = 0;
         //sample* prevsam = c->sample;
         c->sample = m->samples[tempsam];
         c->volume = (double)c->sample->volume / 64.0;
@@ -580,15 +566,20 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
       if(period)
       {
-        c->period = period;
-        c->portdest = c->period;
-        c->stop = false;
-        c->repeat = false;
-        c->index = 0;
+        uint8_t tempeffect = *(data+2)&0x0F;
+        if(tempeffect != 0x03 && tempeffect != 0x05)
+        {
+          c->period = period;
+          c->index = 0;
+          c->stop = false;
+          c->repeat = false;
+          c->offset = 0;
+        }
+        c->portdest = period;
         //c->arp[0] = c->period;
       }
       
-      c->finetune = c->sample->finetune;
+      
     }
 
     if(c->period == 0 || c->sample == NULL || !c->sample->length)
@@ -647,12 +638,13 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
       {
         c->period += c->portstep;
         if(c->period > 856) c->period = 856;
-        else if(c->period < 113) c->period = 113;
+        //else if(c->period < 113) c->period = 113;
       }
     }
     else if(c->dovib)
     {
-      c->period += (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos]/64;
+      c->period = c->portdest + 
+        (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos]/64;
       c->vibpos += c->vibspeed;
       c->vibpos %= 64;
     }
@@ -685,14 +677,15 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   //write non-empty frame to buffer to be interpolated
   else
   {
-    double rate = calcrate(c->period, c->finetune);
+    double rate = calcrate(c->period, c->sample->finetune);
     conv_ratio = SAMPLE_RATE/rate;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
     if(libsrc_error) error(libsrc_error);
     c->cdata->src_ratio = conv_ratio;
     c->cdata->input_frames = ticktime*rate;
     //add fractional part of rate calculation to account for error
-    c->offset += rate*ticktime - (double)(uint32_t)(rate*ticktime);
+    //c->offset += rate*ticktime - (double)(uint32_t)(rate*ticktime);
+    //c->index += c->offset;
 
     for(int i = 0; i < ticktime*rate; i++)
     {
@@ -723,7 +716,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
         //c->index = restore;
       }
     }
-    c->index += offset;
+    //c->index += c->offset;
+    //c->offset -= (uint32_t)(c->offset);
     if(globaltick == gm->speed-1)
     {
       if(c->doarp)
@@ -782,7 +776,6 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     }
   }
 
-  c->prevperiod = c->period;
   /*printf("period: %d\n", c->period);
   printf("SPEED: %d\n", m->speed);
   printf("ROW: %d\n", row);
