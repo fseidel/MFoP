@@ -3,7 +3,7 @@ MFoP
 Welcome!
 
 MFoP (Mod Files on Pizza) is a portable Amiga Mod player written in C. It is designed to be fast, small, lightweight, and portable.
-Currently, MFoP should support all 4 channel 31 instrument Amiga Mod files, as well as most effects. Give it a try!
+Currently, MFoP should support all 4 channel 15/31 instrument Amiga Mod files, as well as most effects. Give it a try!
 
 You'll need to build MFoP with PortAudio and libsamplerate.
 
@@ -18,7 +18,7 @@ normal mode
 ```
 MFoP3 [modfile]
 ```
-headphones mode
+headphones mode (currently disabled)
 ```
 MFoP3 [modfile] -h
 ```
