@@ -25,14 +25,16 @@ int8_t vibsaw[64];
 int8_t vibsquare[64];
 int8_t vibrandom[64];
 
+bool headphones;
 float* audiobuf;
-float* buffs[2];
+float* mixbuf;
+//float* buffs[2];
 int pattern;
 int row;
 uint8_t* curdata;
 bool done;
 int libsrc_error;
-uint8_t curbuf;
+//uint8_t curbuf;
 PaStream* stream;
 PaError pa_error;
 uint8_t globaltick;
@@ -117,7 +119,7 @@ typedef struct{
 modfile* gm;
 channel* gcp;
 
-static int standardcallback(const void* inputBuffer, void* outputBuffer,
+/*static int standardcallback(const void* inputBuffer, void* outputBuffer,
                       unsigned long framesPerBuffer,
                       const PaStreamCallbackTimeInfo* timeInfo,
                       PaStreamCallbackFlags statusFlags,
@@ -127,7 +129,7 @@ static int headphonecallback(const void* inputBuffer, void* outputBuffer,
                       unsigned long framesPerBuffer,
                       const PaStreamCallbackTimeInfo* timeInfo,
                       PaStreamCallbackFlags statusFlags,
-                      void* userdata);
+                      void* userdata);*/
 
 int findperiod(uint16_t period)
 {
@@ -185,10 +187,10 @@ channel* initsound()
     abort();
   }
   channel* channels = malloc(4*sizeof(channel));
-  buffs[0] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
-  buffs[1] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
-  curbuf = 0;
-  audiobuf = buffs[curbuf];
+  mixbuf = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
+  //buffs[1] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
+  //curbuf = 0;
+  audiobuf = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
   for(int i = 0; i < 4; i++)
   {
     channels[i].increment = 0.0f;
@@ -395,6 +397,8 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     //Set panning doesn't do anything in a standard Amiga MOD
     case 0x08: //set panning
+      c->dovib = false;
+      c->dotrem = false;
       break;
 
     case 0x09: //set sample offset
@@ -955,7 +959,7 @@ modfile* modparse(FILE* f)
   return m;
 }
 
-static int standardcallback(const void* inputBuffer, void* outputBuffer,
+/*static int standardcallback(const void* inputBuffer, void* outputBuffer,
                       unsigned long framesPerBuffer,
                       const PaStreamCallbackTimeInfo* timeInfo,
                       PaStreamCallbackFlags statusFlags,
@@ -975,8 +979,8 @@ static int standardcallback(const void* inputBuffer, void* outputBuffer,
     *out++ = *in++;
   }
 
-  (curbuf == 1)?(curbuf = 0):(curbuf = 1);
-  audiobuf = buffs[curbuf];
+  //(curbuf == 1)?(curbuf = 0):(curbuf = 1);
+  //audiobuf = buffs[curbuf];
   if(!done) return 0;
   return 1;
 }
@@ -1003,11 +1007,11 @@ static int headphonecallback(const void* inputBuffer, void* outputBuffer,
     *out++ = r+0.30f*l;
   }
 
-  (curbuf == 1)?(curbuf = 0):(curbuf = 1);
-  audiobuf = buffs[curbuf];
+  //(curbuf == 1)?(curbuf = 0):(curbuf = 1);
+  //audiobuf = buffs[curbuf];
   if(!done) return 0;
   return 1;
-}
+}*/
 
 /*PaError blockingmode()
 {
@@ -1024,9 +1028,10 @@ int main(int argc, char const *argv[])
     printf("Please specify a valid mod file.\n");
     return 1;
   }
-  if(argc > 2 && strcmp(argv[2], "-h") == 0) callback = headphonecallback;
-  else callback = standardcallback;
-
+  /*if(argc > 2 && strcmp(argv[2], "-h") == 0) callback = headphonecallback;
+  else callback = standardcallback;*/
+  if(argc > 2 && strcmp(argv[2], "-h") == 0) headphones = true;
+  else headphones = false;
   callback = NULL;
 
   FILE* f = fopen(argv[1], "r");
@@ -1068,7 +1073,21 @@ int main(int argc, char const *argv[])
   while(!done)
   {
     steptick(gm, gcp);
-    pa_error = Pa_WriteStream(stream, audiobuf, ticktime*SAMPLE_RATE);
+    if(headphones)
+    {
+      float* in = audiobuf;
+      float* out = mixbuf;
+      for(unsigned int i = 0; i < ticktime*SAMPLE_RATE; i++)
+      {
+        float l = *in++;
+        float r = *in++;
+        *out++ = l+0.30f*r;
+        *out++ = r+0.30f*l;
+      }
+      pa_error = Pa_WriteStream(stream, mixbuf, ticktime*SAMPLE_RATE);
+    }
+    else
+      pa_error = Pa_WriteStream(stream, audiobuf, ticktime*SAMPLE_RATE);
     if(pa_error != paNoError)
     {
       printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
