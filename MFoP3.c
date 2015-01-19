@@ -51,10 +51,6 @@ uint8_t loopcount;
 uint8_t type;
 bool inloop;
 
-static int (*callback)(const void*, void*, unsigned long,
-                      const PaStreamCallbackTimeInfo*,
-                      PaStreamCallbackFlags, void*);
-
 typedef struct {
   char name[23];
   uint16_t length;
@@ -119,18 +115,6 @@ typedef struct{
 modfile* gm;
 channel* gcp;
 
-/*static int standardcallback(const void* inputBuffer, void* outputBuffer,
-                      unsigned long framesPerBuffer,
-                      const PaStreamCallbackTimeInfo* timeInfo,
-                      PaStreamCallbackFlags statusFlags,
-                      void* userdata);
-
-static int headphonecallback(const void* inputBuffer, void* outputBuffer,
-                      unsigned long framesPerBuffer,
-                      const PaStreamCallbackTimeInfo* timeInfo,
-                      PaStreamCallbackFlags statusFlags,
-                      void* userdata);*/
-
 int findperiod(uint16_t period)
 {
   for(int i = 0; i < 48; i++) 
@@ -187,16 +171,16 @@ channel* initsound()
     abort();
   }
   channel* channels = malloc(4*sizeof(channel));
-  mixbuf = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
+  mixbuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   //buffs[1] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
   //curbuf = 0;
-  audiobuf = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
+  audiobuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   for(int i = 0; i < 4; i++)
   {
     channels[i].increment = 0.0f;
     channels[i].buffer = malloc((PAL_CLOCK/2.0)*sizeof(float));
     //channels[i].output = malloc(1024*sizeof(float));
-    channels[i].resampled = malloc(0.02*SAMPLE_RATE*sizeof(float));
+    channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
     channels[i].repeat = false;
     channels[i].arp = malloc(3*sizeof(uint16_t));
@@ -234,7 +218,7 @@ channel* initsound()
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
-                                  SAMPLE_RATE*0.02, callback,
+                                  SAMPLE_RATE*0.02, NULL,
                                   audiobuf);
   if(pa_error != paNoError)
   {
@@ -283,6 +267,7 @@ void processnoteeffects(channel* c, uint8_t* data)
   switch(tempeffect)
   {
     case 0x00: //normal/arpeggio
+    cancel:
       c->dovib = false;
       c->dotrem = false;
       if(effectdata)
@@ -397,8 +382,8 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     //Set panning doesn't do anything in a standard Amiga MOD
     case 0x08: //set panning
-      c->dovib = false;
-      c->dotrem = false;
+      effectdata = 0x00;
+      goto cancel;
       break;
 
     case 0x09: //set sample offset
@@ -504,7 +489,7 @@ void processnoteeffects(channel* c, uint8_t* data)
           c->targetedport = false;
           c->doarp = false;
           c->doport = false;
-          c->volstep = (effectdata & 0x0F);
+          c->volume += (effectdata & 0x0F)/64.0;
           c->effect_timer = 2;
           c->fineeffect = true;
           break;
@@ -513,9 +498,9 @@ void processnoteeffects(channel* c, uint8_t* data)
           c->targetedport = false;
           c->doarp = false;
           c->doport = false;
-          c->volstep = -(effectdata & 0x0F);
-          c->effect_timer = 2;
-          c->fineeffect = true;
+          c->volume -= (effectdata & 0x0F)/64.0;
+          c->effect_timer = 0;
+          //c->fineeffect = true;
           break;
 
         case 0xC0: //cut from note + x vblanks
@@ -667,6 +652,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   //printf("writesize: %d\n", writesize);
 
   //write empty frame
+  c->cdata->output_frames = ticktime*SAMPLE_RATE;
   if(c->stop)
   {
     conv_ratio = 1.0;
@@ -788,6 +774,7 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
   printf("normal size: %f\n", SAMPLE_RATE*m->secsperrow);*/
 
   //if(outer == 5) exit(0);
+  
   //PAY ATTENTION TO THIS
 
   if(globaltick == m->speed - 1)
@@ -951,75 +938,13 @@ modfile* modparse(FILE* f)
     memcpy(m->patterns, filearr+600, len);
     sampleparse(m, filearr, len+600);
   }
-  m->speed = 6; //default speed = 6
-  m->tempo = 125;
+  m->speed = 3; //default speed = 6
+  m->tempo = 142;
   m->secsperrow = 0.02*(m->speed);
-  ticktime = 0.02;
+  ticktime = 1/(0.4*m->tempo);
   //printf("secsperrow: %f\n", m->secsperrow);
   return m;
 }
-
-/*static int standardcallback(const void* inputBuffer, void* outputBuffer,
-                      unsigned long framesPerBuffer,
-                      const PaStreamCallbackTimeInfo* timeInfo,
-                      PaStreamCallbackFlags statusFlags,
-                      void* userdata)
-{
-  (void) inputBuffer;
-  (void) timeInfo;
-  (void) statusFlags;
-  (void) userdata;
-  steptick(gm, gcp);
-  float* out = (float*) outputBuffer;
-  float* in = audiobuf;
-
-  for(unsigned int i = 0; i < framesPerBuffer; i++)
-  {
-    *out++ = *in++;
-    *out++ = *in++;
-  }
-
-  //(curbuf == 1)?(curbuf = 0):(curbuf = 1);
-  //audiobuf = buffs[curbuf];
-  if(!done) return 0;
-  return 1;
-}
-
-static int headphonecallback(const void* inputBuffer, void* outputBuffer,
-                      unsigned long framesPerBuffer,
-                      const PaStreamCallbackTimeInfo* timeInfo,
-                      PaStreamCallbackFlags statusFlags,
-                      void* userdata)
-{
-  (void) inputBuffer;
-  (void) timeInfo;
-  (void) statusFlags;
-  (void) userdata;
-  steptick(gm, gcp);
-  float* out = (float*) outputBuffer;
-  float* in = audiobuf;
-
-  for(unsigned int i = 0; i < framesPerBuffer; i++)
-  {
-    float l = *in++;
-    float r = *in++;
-    *out++ = l+0.30f*r;
-    *out++ = r+0.30f*l;
-  }
-
-  //(curbuf == 1)?(curbuf = 0):(curbuf = 1);
-  //audiobuf = buffs[curbuf];
-  if(!done) return 0;
-  return 1;
-}*/
-
-/*PaError blockingmode()
-{
-  steptick(gm, gcp);
-  Pa_WriteStream(stream, audiobuf, gm->speed*0.02f);
-  (curbuf == 1)?(curbuf = 0):(curbuf = 1);
-  audiobuf = buffs[curbuf];
-}*/
 
 int main(int argc, char const *argv[])
 {
@@ -1028,11 +953,9 @@ int main(int argc, char const *argv[])
     printf("Please specify a valid mod file.\n");
     return 1;
   }
-  /*if(argc > 2 && strcmp(argv[2], "-h") == 0) callback = headphonecallback;
-  else callback = standardcallback;*/
+
   if(argc > 2 && strcmp(argv[2], "-h") == 0) headphones = true;
   else headphones = false;
-  callback = NULL;
 
   FILE* f = fopen(argv[1], "r");
   if(f == NULL)
@@ -1053,6 +976,7 @@ int main(int argc, char const *argv[])
     printf("Invalid modfile. Error %d\n", gm->songlength);
     return 1;
   }*/
+
   fclose(f);
   gcp = initsound();
   patternset = false;
@@ -1064,11 +988,6 @@ int main(int argc, char const *argv[])
     printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
     abort();
   }
-
-  /*while(!done)
-  {
-    Pa_Sleep(20); //play until done
-  }*/
 
   while(!done)
   {
