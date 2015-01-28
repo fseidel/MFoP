@@ -792,12 +792,16 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
   {
     sample* s = malloc(sizeof(sample));
     m->samples[i] = s;
-    memcpy(&(s->name), filearr+20+(30*i), 22);
+    strncpy(s->name, (char*)filearr+20+(30*i), 22);
     s->name[22] = '\x00';
 
     s->length = (uint16_t)*(filearr+42+(30*i)) << 8;
     s->length |= (uint16_t)*(filearr+43+(30*i));
-
+    for(int j = 0; j < 22; j++)
+    {
+      if(!s->name[j]) break;
+      if(s->name[j] < 32) s->name[j] = 32;
+    }
     if(s->name[0]) printf("%s\n", s->name);
     //printf("length: %d\n", s->length);
     if (s->length != 0)
