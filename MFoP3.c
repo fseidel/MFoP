@@ -651,8 +651,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
 
   //printf("writesize: %d\n", writesize);
 
-  //write empty frame
   c->cdata->output_frames = ticktime*SAMPLE_RATE;
+  //write empty frame
   if(c->stop)
   {
     conv_ratio = 1.0;
@@ -752,8 +752,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < writesize; i++)
     {
       audiobuf[i*2+offset] = c->resampled[i];
-      if(audiobuf[i*2+offset] >= 0.75f)
-        audiobuf[i*2+offset] = 0.0f;
+      /*if(audiobuf[i*2+offset] >= 0.75f)
+        audiobuf[i*2+offset] = 0.0f;*/
     }
   }
   else
@@ -761,8 +761,8 @@ void processnote(modfile* m, channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < writesize; i++)
     {
       audiobuf[i*2+offset] += c->resampled[i];
-      if(audiobuf[i*2+offset] >= 0.75f)
-        audiobuf[i*2+offset] = 0.0f;
+      /*if(audiobuf[i*2+offset] >= 0.75f)
+        audiobuf[i*2+offset] = 0.0f;*/
     }
   }
 
