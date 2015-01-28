@@ -391,6 +391,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       break;
 
     case 0x0A: //volume slide
+      c->dovib = false;
       //cancel slide
       if(!effectdata) c->volstep = 0;
       //slide up
@@ -404,6 +405,7 @@ void processnoteeffects(channel* c, uint8_t* data)
     //0x0B already taken care of by preprocesseffects()
 
     case 0x0C: //set volume
+      c->dovib = false;
       c->volstep = 0;
       if(effectdata > 64) c->volume = 1.0;
       else c->volume = (double)effectdata / 64.0;
