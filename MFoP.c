@@ -9,7 +9,7 @@
 #include <portaudio.h>
 #include <time.h>
 
-static double const PAL_CLOCK = 7093789.2;
+static uint32_t const PAL_CLOCK = 3546895;
 static double const SAMPLE_RATE = 44100;
 static double const FINETUNE_BASE = 1.0072382087;
 
@@ -28,6 +28,7 @@ int8_t saw[64];
 int8_t square[64];
 int8_t randwave[64];
 
+bool loop;
 bool headphones;
 float* audiobuf;
 float* mixbuf;
@@ -125,7 +126,7 @@ int findperiod(uint16_t period)
 static inline double calcrate(uint16_t period, int8_t finetune)
 {
   return PAL_CLOCK/
-    (2.0*round((double)period*pow(FINETUNE_BASE, -(double)finetune)));
+    (round((double)period*pow(FINETUNE_BASE, -(double)finetune)));
 }
 
 //Currently unused because of funkrepeat
@@ -181,7 +182,7 @@ channel* initsound()
     channels[i].storedvolume = 0.0;
     channels[i].deltick = 0;
     channels[i].increment = 0.0f;
-    channels[i].buffer = malloc((PAL_CLOCK/2.0)*sizeof(float));
+    channels[i].buffer = malloc((PAL_CLOCK/2)*sizeof(float));
     //channels[i].output = malloc(1024*sizeof(float));
     channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
@@ -780,8 +781,23 @@ void steptick(channel* cp)
   //printf("Pattern: %d\n", pattern);
   if(pattern >= gm->songlength)
   {
-    done = true;
-    return;
+    if(loop)
+    {
+      pattern = 0;
+      row = 0;
+      globaltick = 0;
+      gm->speed = 6;
+      nextspeed = 6;
+      gm->tempo = 125;
+      nexttempo = 125;
+      ticktime = 0.02;
+      nextticktime = 0.02;
+    }
+    else
+    {
+      done = true;
+      return;
+    }
   }
 
   if(globaltick == 0)
@@ -883,19 +899,38 @@ modfile* modparse(FILE* f)
   //printf("secsperrow: %f\n", m->secsperrow);
   return m;
 }
-
-int main(int argc, char const *argv[])
+char* filename;
+int main(int argc, char *argv[])
 {
   if(argc < 2)
   {
     printf("Please specify a valid mod file.\n");
     return 1;
   }
+  headphones = false;
+  for(int i = 1; i < argc; i++)
+  {
+    switch(*argv[i])
+    {
+      case '-':
+        switch(*(argv[i]+1))
+        {
+          case 'h':
+            headphones = true;
+            break;
+          case 'l':
+            loop = true;
+            break;
+        }
+        break;
+      default:
+        filename = argv[i];
+    }
+  }
+  //if(argc > 2 && strcmp(argv[2], "-h") == 0) headphones = true;
+  //else headphones = false;
 
-  if(argc > 2 && strcmp(argv[2], "-h") == 0) headphones = true;
-  else headphones = false;
-
-  FILE* f = fopen(argv[1], "r");
+  FILE* f = fopen(filename, "r");
   if(f == NULL)
   {
     printf("Please specify a valid mod file.\n");

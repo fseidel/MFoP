@@ -18,7 +18,8 @@ normal mode
 ```
 MFoP [modfile]
 ```
-headphones mode
+options
 ```
-MFoP [modfile] -h
+-h = headphones mode (does a bit of mixing to make the panning less severe)
+-l = looping (restarts song at end)
 ```
