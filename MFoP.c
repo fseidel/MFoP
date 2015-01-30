@@ -239,9 +239,15 @@ void preprocesseffects(uint8_t* data)
     if(effectdata > 0x1F)
     {
       gm->tempo = effectdata;
+      nexttempo = effectdata;
       ticktime = 1/(0.4*effectdata);
+      nextticktime = 1/(0.4*effectdata);
     }
-    else gm->speed = effectdata;
+    else
+    {
+      gm->speed = effectdata;
+      nextspeed = effectdata;
+    }
   }
 }
 
@@ -366,16 +372,14 @@ void processnoteeffects(channel* c, uint8_t* data)
       }
       break;
     }
-
-    case 0x0F: //set speed/tempo
+    case 0x0F:
       if(effectdata == 0) break;
-      if(globaltick != gm->speed-1) break;
       if(effectdata > 0x1F)
       {
-        gm->tempo = effectdata;
-        ticktime = 1/(0.4*effectdata);
+        nexttempo = effectdata;
+        nextticktime = 1/(0.4*effectdata);
       }
-      else gm->speed = effectdata;
+      else nextspeed = effectdata;
       break;
 
     default:
@@ -390,13 +394,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   uint8_t effectdata = *(data+3);
   if(globaltick == 0)
   {
-    /*gm->speed = nextspeed;
-    gm->tempo = nexttempo;
-    m->speed = nextspeed;
-    m->tempo = nexttempo;*/
-    //gm->secsperrow = 0.02*gm->speed;
-    //m->secsperrow = 0.02*m->speed;
-    //ticktime = nextticktime;
     if(tempeffect == 0x0E && (effectdata&0xF0) == 0xD0) 
       c->deltick = effectdata&0x0F;
     uint16_t period = (((uint16_t)((*data)&0x0F))<<8) | (uint16_t)(*(data+1));
@@ -552,8 +549,18 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           }
         }
 
-        default:
-          break;
+      /*case 0x0F: //set speed/tempo
+        if(effectdata == 0) break;
+        if(effectdata > 0x1F)
+        {
+          nexttempo = effectdata;
+          nextticktime = 1/(0.4*effectdata);
+        }
+        else nextspeed = effectdata;
+        break;*/
+
+      default:
+         break;
       }
     }
 
@@ -761,6 +768,10 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 
 void steptick(channel* cp)
 {
+  //gm->speed = nextspeed;
+  //gm->tempo = nexttempo;
+  //ticktime = nextticktime;
+
   if(row == 64)
   { 
     row = 0;
@@ -774,7 +785,17 @@ void steptick(channel* cp)
   }
 
   if(globaltick == 0)
+  {
     curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
+    preprocesseffects(curdata);
+    preprocesseffects(curdata + 4);
+    preprocesseffects(curdata + 8);
+    preprocesseffects(curdata + 12);
+    gm->speed = nextspeed;
+    gm->tempo = nexttempo;
+    ticktime = nextticktime;
+  }
+
 
   processnote(&cp[0], curdata, 0, true);
   processnote(&cp[1], curdata + 4, 1, true);
@@ -782,7 +803,7 @@ void steptick(channel* cp)
   processnote(&cp[3], curdata + 12, 0, false);
 
   globaltick++;
-  if(globaltick >= gm->speed)
+  if(globaltick == gm->speed)
   {
     if(delcount)
     {
@@ -854,8 +875,11 @@ modfile* modparse(FILE* f)
     sampleparse(m, filearr, len+600);
   }
   m->speed = 6; //default speed = 6
+  nextspeed = 6;
   m->tempo = 125;
-  ticktime = 1/(0.4*m->tempo);
+  nexttempo = 125;
+  ticktime = 0.02;
+  nextticktime = 0.02;
   //printf("secsperrow: %f\n", m->secsperrow);
   return m;
 }
@@ -904,10 +928,6 @@ int main(int argc, char const *argv[])
   }
 
   curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
-  preprocesseffects(curdata);
-  preprocesseffects(curdata + 4);
-  preprocesseffects(curdata + 8);
-  preprocesseffects(curdata + 12);
 
   while(!done)
   {
