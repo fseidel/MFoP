@@ -16,8 +16,7 @@ static double const FINETUNE_BASE = 1.0072382087;
 uint16_t periods[] = {
   856,808,762,720,678,640,604,570,538,508,480,453,
   428,404,381,360,339,320,302,285,269,254,240,226,
-  214,202,190,180,170,160,151,143,135,127,120,113,
-  107,101,95,90,85,80,75,71,67,63,60,56};
+  214,202,190,180,170,160,151,143,135,127,120,113};
 
 uint8_t funktable[] = {
   0,5,6,7,8,10,11,13,16,19,22,26,32,43,64,128};
@@ -117,7 +116,7 @@ channel* gcp;
 
 int findperiod(uint16_t period)
 {
-  for(int i = 0; i < 48; i++) 
+  for(int i = 0; i < 36; i++) 
     if(periods[i] == period) return i;
   //printf("PERIOD TABLE LOOKUP ERROR: %d\n", period);
   return -1;
@@ -363,7 +362,7 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
 
         case 0xC0: //cut from note + x vblanks
-          if(globaltick == (effectdata&0x0F)) c->stop = true;
+          if(globaltick == (effectdata&0x0F)) c->volume = 0.0f;
           break;
 
         case 0xE0: //delay pattern x notes
@@ -619,9 +618,9 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   {
     double rate = calcrate(c->tempperiod, c->sample->finetune);
     conv_ratio = SAMPLE_RATE/rate;
+    c->cdata->src_ratio = conv_ratio;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
     if(libsrc_error) error(libsrc_error);
-    c->cdata->src_ratio = conv_ratio;
     c->cdata->input_frames = ticktime*rate;
 
     //add fractional part of rate calculation to account for error
@@ -640,7 +639,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       c->funkpos = (c->funkpos+1) % (c->sample->repeatlength*2);
     }
 
-    for(int i = 0; i < ticktime*rate; i++)
+    for(int i = 0; i < ticktime*rate-1; i++)
     {
       c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f * c->volume * 0.4f;
 
@@ -659,7 +658,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         else
         {
           //float last = c->buffer[i];
-          for(int j = i+1; j < ticktime*rate; j++)
+          for(int j = i+1; j < ticktime*rate-1; j++)
             c->buffer[j] = 0.0f;
           c->stop = true;
           break;
