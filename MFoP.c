@@ -153,10 +153,10 @@ void precalculatetables()
   for(int i = 0; i < 64; i++)
   {
     cursin = sin(i*2*M_PI/64.0);
-    sine[i] = 64*cursin;
-    saw[i] = -64*((i/64.0) - floor((i/64.0) + 0.5));
+    sine[i] = 255*cursin;
+    saw[i] = -255*((i/64.0) - floor((i/64.0) + 0.5));
     cursin = sin((i*2*M_PI+(M_PI/2)/64));
-    square[i] = 64*((cursin == 0)?0:cursin/abs(cursin));
+    square[i] = 255*((cursin == 0)?0:cursin/abs(cursin));
     randwave[i] = (int8_t)(rand()%256);
   }
 }
@@ -301,7 +301,7 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     case 0x04: //vibrato
       c->tempperiod = c->period + 
-        (((int16_t)c->vibdepth*waves[c->vibwave&3][c->vibpos])>>6);
+        (((int16_t)c->vibdepth*waves[c->vibwave&3][c->vibpos])>>7);
       c->vibpos += c->vibspeed;
       c->vibpos %= 64;
       break;
@@ -641,7 +641,8 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
     for(int i = 0; i < ticktime*rate-1; i++)
     {
-      c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f * c->volume * 0.4f;
+      c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f 
+        * c->volume * 0.4f;
 
       if(c->repeat && (c->index >= (c->sample->repeatlength)*2
         + (c->sample->repeatpoint)*2))
