@@ -182,7 +182,7 @@ channel* initsound()
     channels[i].storedvolume = 0.0;
     channels[i].deltick = 0;
     channels[i].increment = 0.0f;
-    channels[i].buffer = malloc((PAL_CLOCK/2)*sizeof(float));
+    channels[i].buffer = malloc(PAL_CLOCK*sizeof(float));
     //channels[i].output = malloc(1024*sizeof(float));
     channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
