@@ -949,7 +949,7 @@ int main(int argc, char *argv[])
     }
     else
       pa_error = Pa_WriteStream(stream, audiobuf, ticktime*SAMPLE_RATE);
-    if(pa_error != paNoError)
+    if(pa_error != paNoError && pa_error != paOutputUnderflowed)
     {
       printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
       abort();
