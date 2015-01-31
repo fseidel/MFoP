@@ -21,11 +21,11 @@ uint16_t periods[] = {
 uint8_t funktable[] = {
   0,5,6,7,8,10,11,13,16,19,22,26,32,43,64,128};
 
-int8_t* waves[4];
-int8_t sine[64];
-int8_t saw[64];
-int8_t square[64];
-int8_t randwave[64];
+int16_t* waves[4];
+int16_t sine[64];
+int16_t saw[64];
+int16_t square[64];
+int16_t randwave[64];
 
 bool loop;
 bool headphones;
@@ -69,7 +69,7 @@ typedef struct {
 typedef struct{
   sample* sample;
   double volume;
-  double storedvolume;
+  double tempvolume;
   double offset;
   uint32_t index;
   float* buffer;
@@ -155,8 +155,7 @@ void precalculatetables()
     cursin = sin(i*2*M_PI/64.0);
     sine[i] = 255*cursin;
     saw[i] = -255*((i/64.0) - floor((i/64.0) + 0.5));
-    cursin = sin((i*2*M_PI+(M_PI/2)/64));
-    square[i] = 255*((cursin == 0)?0:cursin/abs(cursin));
+    square[i] = (i<32)?255:-256;
     randwave[i] = (int8_t)(rand()%256);
   }
 }
@@ -178,7 +177,7 @@ channel* initsound()
   for(int i = 0; i < 4; i++)
   {
     channels[i].volume = 0.0;
-    channels[i].storedvolume = 0.0;
+    channels[i].tempvolume = 0.0;
     channels[i].deltick = 0;
     channels[i].increment = 0.0f;
     channels[i].buffer = malloc(PAL_CLOCK*sizeof(float));
@@ -259,10 +258,7 @@ void processnoteeffects(channel* c, uint8_t* data)
   switch(tempeffect)
   {
     case 0x00: //normal/arpeggio
-      if(effectdata)
-      {
-        c->tempperiod = c->arp[globaltick%3];
-      }
+      if(effectdata) c->tempperiod = c->arp[globaltick%3];
       break;
 
     case 0x01: //slide up
@@ -280,6 +276,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
       //slide down
       else c->volume -= effectdata/64.0;
+      c->tempvolume = c->volume;
       //exploit fallthrough
 
     case 0x03: //tone portamento
@@ -297,19 +294,23 @@ void processnoteeffects(channel* c, uint8_t* data)
       if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
       //slide down
       else c->volume -= effectdata/64.0;
+      c->tempvolume = c->volume;
       //exploit fallthrough
 
     case 0x04: //vibrato
       c->tempperiod = c->period + 
-        (((int16_t)c->vibdepth*waves[c->vibwave&3][c->vibpos])>>7);
+        ((c->vibdepth*waves[c->vibwave&3][c->vibpos])>>7);
       c->vibpos += c->vibspeed;
       c->vibpos %= 64;
+      //printf("%d %d\n", c->period, c->tempperiod);
       break;
 
     case 0x07: //tremolo
-      c->volume = c->storedvolume +
-        (int16_t)c->tremdepth*waves[c->tremwave&3][c->trempos]/64.0;
+      c->tempvolume = c->volume +
+        (double)(((int16_t)c->tremdepth*
+          (waves[c->tremwave&3][c->trempos])))/4096.0;
       c->trempos += c->tremspeed;
+        //c->trempos += 1;
       c->trempos %= 64;
       break;
 
@@ -322,6 +323,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
       //slide down
       else c->volume -= effectdata/64.0;
+      c->tempvolume = c->volume;
       break;
 
     //0x0B already taken care of by preprocesseffects()
@@ -362,7 +364,7 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
 
         case 0xC0: //cut from note + x vblanks
-          if(globaltick == (effectdata&0x0F)) c->volume = 0.0f;
+          if(globaltick == (effectdata&0x0F)) c->volume = 0.0;
           break;
 
         case 0xE0: //delay pattern x notes
@@ -404,13 +406,14 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       {
         if(tempsam)
         {
-          c->funkpos = 0;
+          //c->funkpos = 0;
           c->stop = false;
           tempsam--;
           c->offset = 0;
           //sample* prevsam = c->sample;
           c->sample = gm->samples[tempsam];
           c->volume = (double)c->sample->volume / 64.0;
+          c->tempvolume = c->volume;
         }
         //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
         if(period)
@@ -453,22 +456,21 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           break;
 
         case 0x04: //vibrato
-          if(effectdata)
-          {
-            c->vibdepth = effectdata & 0x0F;
-            c->vibspeed = (effectdata >> 4) & 0x0F;
-          }
+          if(effectdata & 0x0F) c->vibdepth = effectdata & 0x0F;
+          if(effectdata & 0xF0) c->vibspeed = (effectdata >> 4) & 0x0F;
           if(!(c->vibwave&4)) c->vibpos = 0;
           break;
+
+        case 0x06: //vibrato + volslide
+          if(!(c->vibwave&4)) c->vibpos = 0;
         
         case 0x07: //tremolo
-          c->storedvolume = c->volume;
           if(effectdata)
           {
             c->tremdepth = effectdata & 0x0F;
             c->tremspeed = (effectdata >> 4) & 0x0F;
           }
-          if(!(c->tremwave&4)) c->trempos = 0;
+          if((c->tremwave&4)) c->trempos = 0;
           break;
 
         case 0x09: //set sample offset
@@ -483,6 +485,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         case 0x0C: //set volume
           if(effectdata > 64) c->volume = 1.0;
           else c->volume = effectdata / 64.0;
+          c->tempvolume = c->volume;
           break;
 
         case 0x0D: //row jump
@@ -509,7 +512,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
               if(!(effectdata & 0x0F))
               {
                 looppoint = ((row == -1)?0:row);
-                //looppoint = row;
               }
               else if(effectdata & 0x0F) 
               {
@@ -530,10 +532,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
             case 0xA0:
               c->volume += (effectdata&0x0F)/64.0;
+              c->tempvolume = c->volume;
               break;
 
             case 0xB0:
               c->volume -= (effectdata&0x0F)/64.0;
+              c->tempvolume = c->volume;
               break;
 
             case 0xC0:
@@ -548,16 +552,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
               break;
           }
         }
-
-      /*case 0x0F: //set speed/tempo
-        if(effectdata == 0) break;
-        if(effectdata > 0x1F)
-        {
-          nexttempo = effectdata;
-          nextticktime = 1/(0.4*effectdata);
-        }
-        else nextspeed = effectdata;
-        break;*/
 
       default:
          break;
@@ -582,21 +576,8 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
   int writesize = SAMPLE_RATE*ticktime;
 
-  //c->cdata->output_frames = (int)(SAMPLE_RATE*0.02);
-
-  /*if(c->effect_timer == 2)
-  {
-    
-    else if(c->dovib)
-    {
-      c->period = c->portdest + 
-        (int16_t)c->vibdepth*vibwaves[c->vibwave&3][c->vibpos]/64;
-      c->vibpos += c->vibspeed;
-      c->vibpos %= 64;
-    }*/
-
-  if(c->volume < 0.0) c->volume = 0.0;
-  else if(c->volume > 1.0) c->volume = 1.0;
+  if(c->tempvolume < 0.0) c->tempvolume = 0.0;
+  else if(c->tempvolume > 1.0) c->tempvolume = 1.0;
   if(c->tempperiod > 856) c->tempperiod = 856;
   else if(c->tempperiod < 113) c->tempperiod = 113;
   
@@ -632,9 +613,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     if(c->funkcounter >= 128)
     {
       c->funkcounter = 0;
-      /*c->sample->sampledata[c->sample->repeatpoint*2+c->funkpos] =
-        (((int8_t)(c->sample->sampledata[c->sample->repeatpoint*2
-          +c->funkpos]*128)^0xFF)/128.0f);*/
       c->sample->sampledata[c->sample->repeatpoint*2+c->funkpos] ^= 0xFF;
       c->funkpos = (c->funkpos+1) % (c->sample->repeatlength*2);
     }
@@ -642,7 +620,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < ticktime*rate-1; i++)
     {
       c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f 
-        * c->volume * 0.4f;
+        * c->tempvolume * 0.4f;
 
       if(c->repeat && (c->index >= (c->sample->repeatlength)*2
         + (c->sample->repeatpoint)*2))
@@ -701,21 +679,10 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     }
   }
 
-  /*printf("period: %d\n", c->period);
-  printf("SPEED: %d\n", m->speed);
-  printf("ROW: %d\n", row);
-  printf("TICK: %u\n", globaltick);
-  printf("length of buffer: %d\n", count);
-  printf("normal size: %f\n", SAMPLE_RATE*m->secsperrow);*/
-
-  //if(outer == 5) exit(0);
-  
-  //PAY ATTENTION TO THIS
-
   if(globaltick == gm->speed - 1)
   {
     c->tempperiod = c->period;
-    if(tempeffect == 0x07) c->volume = c->storedvolume;
+    //c->tempvolume = c->volume;
   }
 }
 
