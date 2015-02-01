@@ -27,17 +27,17 @@ int16_t saw[64];
 int16_t square[64];
 int16_t randwave[64];
 
+long filelength;
 bool loop;
 bool headphones;
 float* audiobuf;
 float* mixbuf;
-//float* buffs[2];
+
 int pattern;
 int row;
 uint8_t* curdata;
 bool done;
 int libsrc_error;
-//uint8_t curbuf;
 PaStream* stream;
 PaError pa_error;
 uint8_t globaltick;
@@ -49,10 +49,7 @@ double ticktime;
 double nextticktime;
 uint8_t nexttempo;
 uint8_t nextspeed;
-uint8_t looppoint;
-uint8_t loopcount;
 uint8_t type;
-bool inloop;
 
 typedef struct {
   char name[23];
@@ -62,7 +59,6 @@ typedef struct {
   uint16_t repeatpoint;
   uint16_t repeatlength;
   bool inverted;
-  //float* sampledata;
   int8_t* sampledata;
 } sample;
 
@@ -98,6 +94,8 @@ typedef struct{
   uint8_t funkcounter;
   uint8_t funkpos;
   uint8_t funkspeed;
+  int8_t looppoint;
+  int8_t loopcount;
 } channel;
 
 typedef struct{
@@ -129,16 +127,22 @@ static inline double calcrate(uint16_t period, int8_t finetune)
 }
 
 //Currently unused because of funkrepeat
-void floatncpy(float* dest, int8_t* src, int n)
+/*void floatncpy(float* dest, int8_t* src, int n)
 {
   for(int i = 0; i < n; i++)
     dest[i] = ((float)src[i])/128.0f;
+}*/
+
+void libsrcerror(int err)
+{
+  printf("Lib SRC Error: %s\n", src_strerror(err));
+  abort();
 }
 
-void error(int err)
+void portaudioerror(int err)
 {
-  printf("Error: %s\n", src_strerror(err));
-  abort();
+  printf("PortAudio error: %s\n", Pa_GetErrorText(err));
+  abort(); 
 }
 
 void precalculatetables()
@@ -164,11 +168,7 @@ channel* initsound()
 {
   precalculatetables();
   pa_error = Pa_Initialize();
-  if(pa_error != paNoError)
-  {
-    printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
-    abort();
-  }
+  if(pa_error != paNoError) portaudioerror(pa_error);
   channel* channels = malloc(4*sizeof(channel));
   mixbuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   //buffs[1] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
@@ -199,6 +199,8 @@ channel* initsound()
     channels[i].funkcounter = 0;
     channels[i].funkpos = 0;
     channels[i].funkspeed = 0;
+    channels[i].looppoint = 0;
+    channels[i].loopcount = -1;
     channels[i].sample = NULL;
     //channels[i].converter = src_new(SRC_ZERO_ORDER_HOLD, 1, &libsrc_error);
     channels[i].converter = src_new(SRC_LINEAR, 1, &libsrc_error);
@@ -220,12 +222,8 @@ channel* initsound()
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
                                   SAMPLE_RATE*0.02, NULL,
                                   audiobuf);
-  if(pa_error != paNoError)
-  {
-    printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
-    abort();
-  }
-
+  
+  if(pa_error != paNoError) portaudioerror(pa_error);
   return channels;
 }
 
@@ -509,24 +507,20 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
               break;
 
             case 0x60: //jump to loop, play x times
-              if(!(effectdata & 0x0F))
-              {
-                looppoint = ((row == -1)?0:row);
-              }
+              if(!(effectdata & 0x0F)) c->looppoint = row;
               else if(effectdata & 0x0F) 
               {
-                if(!inloop)
+                if(c->loopcount == -1)
                 {
-                  loopcount = (effectdata & 0x0F) - 1;
-                  row = looppoint-1;
-                  inloop = true;
+                  c->loopcount = (effectdata & 0x0F) - 1;
+                  row = c->looppoint-1;
                 }
-                else if(inloop && loopcount)
+                else if(c->loopcount)
                 {
-                  row = looppoint-1;
-                  loopcount--;
+                  c->loopcount--;
+                  row = c->looppoint-1;
                 }
-                else inloop = false;
+                else c->loopcount--;
               }
               break;
 
@@ -588,7 +582,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     conv_ratio = 1.0;
     c->cdata->src_ratio = conv_ratio;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
-    if(libsrc_error) error(libsrc_error);
+    if(libsrc_error) libsrcerror(libsrc_error);
     c->cdata->input_frames = ticktime*SAMPLE_RATE;
     //c->rate = SAMPLE_RATE;
     for(int i = 0; i < ticktime*SAMPLE_RATE; i++)
@@ -601,7 +595,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     conv_ratio = SAMPLE_RATE/rate;
     c->cdata->src_ratio = conv_ratio;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
-    if(libsrc_error) error(libsrc_error);
+    if(libsrc_error) libsrcerror(libsrc_error);
     c->cdata->input_frames = ticktime*rate;
 
     //add fractional part of rate calculation to account for error
@@ -647,12 +641,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     }
   }
   libsrc_error = src_process(c->converter, c->cdata);
-  if(libsrc_error) 
-  {
-    printf("RATIO: %f\n", c->cdata->src_ratio);
-    printf("FAILED ON ATTEMPT TO PROCESS\n");
-    error(libsrc_error);
-  }
+  if(libsrc_error) libsrcerror(libsrc_error);
   
   if(c->cdata->output_frames_gen != c->cdata->output_frames)
   {
@@ -805,9 +794,7 @@ void steptick(channel* cp)
 
 modfile* modparse(FILE* f)
 {
-  fseek(f, 0L, SEEK_END);
-  uint8_t* filearr = malloc(ftell(f)*sizeof(uint8_t));
-  fseek(f, 0L,SEEK_SET);
+  uint8_t* filearr = malloc(filelength*sizeof(uint8_t));
   int seek = 0;
   int c;
   while((c = fgetc(f)) != EOF)
@@ -824,8 +811,6 @@ modfile* modparse(FILE* f)
   { 
     printf("Warning: Not a 31 instrument 4 channel MOD file. May not be playable.\n");
     type = 1;
-    //m->songlength = 0;
-    //return m;
   }
   else type = 0;
   //printf("magic string%s\n", m->magicstring);
@@ -871,8 +856,7 @@ int main(int argc, char *argv[])
 {
   if(argc < 2)
   {
-    printf("Please specify a valid mod file.\n");
-    return 1;
+    goto fileerror;
   }
   headphones = false;
   for(int i = 1; i < argc; i++)
@@ -894,28 +878,14 @@ int main(int argc, char *argv[])
         filename = argv[i];
     }
   }
-  //if(argc > 2 && strcmp(argv[2], "-h") == 0) headphones = true;
-  //else headphones = false;
 
   FILE* f = fopen(filename, "r");
-  if(f == NULL)
-  {
-    printf("Please specify a valid mod file.\n");
-    return 1;
-  }
+  if(f == NULL) goto fileerror;
+  fseek(f, 0L, SEEK_END);
+  filelength = ftell(f);
+  if(filelength <= 0) goto fileerror;
+  fseek(f, 0L,SEEK_SET);
   gm = modparse(f);
-  inloop = false;
-  //ticktime = 0.02;
-  //nextticktime = 0.02;
-  //nexttempo = 125;
-  //nextspeed = 6;
-
-  //printf("finished parsing modfile\n");
-  /*if(gm->songlength == 0)
-  {
-    printf("Invalid modfile. Error %d\n", gm->songlength);
-    return 1;
-  }*/
 
   fclose(f);
   gcp = initsound();
@@ -923,11 +893,7 @@ int main(int argc, char *argv[])
   //printf("Successfully initialized sound.\n");
 
   pa_error = Pa_StartStream(stream);
-  if(pa_error != paNoError)
-  {
-    printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
-    abort();
-  }
+  if(pa_error != paNoError) portaudioerror(pa_error);
 
   curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
 
@@ -949,11 +915,9 @@ int main(int argc, char *argv[])
     }
     else
       pa_error = Pa_WriteStream(stream, audiobuf, ticktime*SAMPLE_RATE);
+    
     if(pa_error != paNoError && pa_error != paOutputUnderflowed)
-    {
-      printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
-      abort();
-    }
+      portaudioerror(pa_error);
   }
 
   pa_error = Pa_StopStream(stream);
@@ -962,11 +926,13 @@ int main(int argc, char *argv[])
     src_delete(gcp[i].converter);
   }
 
-  if(pa_error != paNoError)
-  {
-    printf("PortAudio error: %s\n", Pa_GetErrorText(pa_error));
-    abort();
-  }
+  if(pa_error != paNoError) portaudioerror(pa_error);
 
   return 0;
+
+  fileerror:
+  {
+    printf("Please specify a valid mod file.\n");
+    return 1;
+  }
 }
