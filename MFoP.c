@@ -1,3 +1,6 @@
+#ifndef M_PI
+  #define M_PI 3.1415926535897932384
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -908,8 +911,8 @@ int main(int argc, char *argv[])
       {
         float l = *in++;
         float r = *in++;
-        *out++ = l+0.30f*r;
-        *out++ = r+0.30f*l;
+        *out++ = l+0.4*r;
+        *out++ = r+0.4*l;
       }
       pa_error = Pa_WriteStream(stream, mixbuf, ticktime*SAMPLE_RATE);
     }
