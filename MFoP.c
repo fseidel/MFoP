@@ -852,6 +852,7 @@ modfile* modparse(FILE* f)
   ticktime = 0.02;
   nextticktime = 0.02;
   //printf("secsperrow: %f\n", m->secsperrow);
+  free(filearr);
   return m;
 }
 char* filename;
