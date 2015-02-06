@@ -11,6 +11,8 @@
 #include <math.h>
 #include <portaudio.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 static uint32_t const PAL_CLOCK = 3546895;
 static double const SAMPLE_RATE = 44100;
@@ -835,16 +837,11 @@ modfile* modparse(FILE* f)
   //printf("max: %d\n", max);
   uint32_t len = (uint32_t)(1024*(max+1)); //1024 = size of pattern
   m->patterns = malloc(len);
-  if(type == 0)
-  {
-    memcpy(m->patterns, filearr+1084, len);
-    sampleparse(m, filearr, len+1084);
-  }
-  else
-  {
-    memcpy(m->patterns, filearr+600, len);
-    sampleparse(m, filearr, len+600);
-  }
+  uint16_t size;
+  if(type == 0) size = 1084;
+  else size = 600;
+  memcpy(m->patterns, filearr+size, len);
+  sampleparse(m, filearr, len+size);
   m->speed = 6; //default speed = 6
   nextspeed = 6;
   m->tempo = 125;
@@ -858,10 +855,7 @@ modfile* modparse(FILE* f)
 char* filename;
 int main(int argc, char *argv[])
 {
-  if(argc < 2)
-  {
-    goto fileerror;
-  }
+  if(argc < 2) goto fileerror;
   headphones = false;
   for(int i = 1; i < argc; i++)
   {
@@ -882,8 +876,9 @@ int main(int argc, char *argv[])
         filename = argv[i];
     }
   }
-
-  FILE* f = fopen(filename, "r");
+  struct stat s;
+  if(stat(filename, &s) == 0 && !S_ISREG(s.st_mode)) goto fileerror;
+  FILE* f = fopen(filename, "rb");
   if(f == NULL) goto fileerror;
   fseek(f, 0L, SEEK_END);
   filelength = ftell(f);
