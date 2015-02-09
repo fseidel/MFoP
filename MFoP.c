@@ -73,7 +73,6 @@ typedef struct{
   sample* sample;
   double volume;
   double tempvolume;
-  double offset;
   uint32_t index;
   float* buffer;
   float* resampled;
@@ -103,6 +102,8 @@ typedef struct{
   uint8_t funkspeed;
   int8_t looppoint;
   int8_t loopcount;
+  uint16_t offset;
+  uint16_t offsetmem;
 } channel;
 
 typedef struct{
@@ -197,7 +198,8 @@ channel* initsound()
     channels[i].portdest = 0;
     channels[i].tempperiod = 0;
     channels[i].portstep = 0;
-    channels[i].offset = 0.0;
+    channels[i].offset = 0;
+    channels[i].offsetmem = 0;
     channels[i].retrig = 0;
     channels[i].vibwave = 0;
     channels[i].tremwave = 0;
@@ -396,181 +398,185 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 {
   uint8_t tempeffect = *(data+2)&0x0F;
   uint8_t effectdata = *(data+3);
-  if(globaltick == 0)
-  {
-    if(tempeffect == 0x0E && (effectdata&0xF0) == 0xD0) 
+  if(tempeffect == 0x0E && (effectdata&0xF0) == 0xD0) 
       c->deltick = effectdata&0x0F;
+  if(globaltick == c->deltick)
+  {
     uint16_t period = (((uint16_t)((*data)&0x0F))<<8) | (uint16_t)(*(data+1));
     uint8_t tempsam = ((((*data))&0xF0) | ((*(data+2)>>4)&0x0F));
-    if(c->deltick == 0)
+    if((period || tempsam) && !inrepeat)
     {
-      if((period || tempsam) && !inrepeat)
+      if(tempsam)
       {
-        if(tempsam)
+        //c->funkpos = 0;
+        c->stop = false;
+        tempsam--;
+        if(tempeffect != 0x03 && tempeffect != 0x05) c->offset = 0;
+        //sample* prevsam = c->sample;
+        c->sample = gm->samples[tempsam];
+        c->volume = (double)c->sample->volume / 64.0;
+        c->tempvolume = c->volume;
+      }
+      //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
+      if(period)
+      {
+        if(tempeffect != 0x03 && tempeffect != 0x05)
         {
-          //c->funkpos = 0;
+          c->period = period;
+          c->tempperiod = period;
+          c->index = 0;
           c->stop = false;
-          tempsam--;
-          c->offset = 0;
-          //sample* prevsam = c->sample;
-          c->sample = gm->samples[tempsam];
-          c->volume = (double)c->sample->volume / 64.0;
-          c->tempvolume = c->volume;
+          c->repeat = false;
+          //c->offset = 0;
         }
-        //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
-        if(period)
-        {
-          if(tempeffect != 0x03 && tempeffect != 0x05)
-          {
-            c->period = period;
-            c->tempperiod = period;
-            c->index = 0;
-            c->stop = false;
-            c->repeat = false;
-            c->offset = 0;
-          }
-          c->portdest = period;
-          //c->arp[0] = c->period;
-        }
+        c->portdest = period;
+        //c->arp[0] = c->period;
       }
-      switch(tempeffect)
+    }
+    switch(tempeffect)
+    {
+      case 0x00:
+        if(effectdata)
+        {
+          c->period = c->portdest;
+          int base = findperiod(c->period);
+          if(base == -1)
+          {
+            break;
+          }
+          c->arp[0] = c->period;
+          //printf("ARP0: %d\n", (int)c->arp[0]);
+          c->arp[1] = periods[base+((effectdata>>4)&0x0F)];
+          //printf("ARP1: %d\n", (int)c->arp[1]);
+          c->arp[2] = periods[base+(effectdata&0x0F)];
+          //printf("ARP2: %d\n", (int)c->arp[2]);
+        }
+        break;
+
+      case 0x03:
+        if(effectdata) c->portstep = effectdata;
+        break;
+
+      case 0x04: //vibrato
+        if(effectdata & 0x0F) c->vibdepth = effectdata & 0x0F;
+        if(effectdata & 0xF0) c->vibspeed = (effectdata >> 4) & 0x0F;
+        /*Check this
+        c->period = c->portdest;
+        c->tempperiod = c->period;
+        Seriously*/
+        if(c->vibwave&4) c->vibpos = 0;
+        break;
+
+      case 0x06: //vibrato + volslide
+        if(c->vibwave&4) c->vibpos = 0;
+      
+      case 0x07: //tremolo
+        if(effectdata)
+        {
+          c->tremdepth = effectdata & 0x0F;
+          c->tremspeed = (effectdata >> 4) & 0x0F;
+        }
+        if(c->tremwave&4) c->trempos = 0;
+        break;
+
+      case 0x09: //set sample offset
+        if(effectdata) c->offsetmem = effectdata * 0x100;
+        c->offset += c->offsetmem;
+        //else c->offset += effectdata * 0x100;
+        c->index = c->offset;
+        break;
+
+      case 0x0B: //position jump
+        if(currow == row) row = 0;
+        pattern = effectdata;
+        patternset = true;
+        break;
+
+      case 0x0C: //set volume
+        if(effectdata > 64) c->volume = 1.0;
+        else c->volume = effectdata / 64.0;
+        c->tempvolume = c->volume;
+        break;
+
+      case 0x0D: //row jump
+        if(delcount) break;
+        if(!patternset) pattern++;
+        row = (effectdata>>4)*10+(effectdata&0x0F);
+        if(addflag) row++; //emulate protracker EEx + Dxx bug
+        if(!offset && !overwrite) patternset = false;
+        break;
+  
+      case 0x0E:
       {
-        case 0x00:
-          if(effectdata)
-          {
-            c->period = c->portdest;
-            int base = findperiod(c->period);
-            if(base == -1)
-            {
-              break;
-            }
-            c->arp[0] = c->period;
-            //printf("ARP0: %d\n", (int)c->arp[0]);
-            c->arp[1] = periods[base+((effectdata>>4)&0x0F)];
-            //printf("ARP1: %d\n", (int)c->arp[1]);
-            c->arp[2] = periods[base+(effectdata&0x0F)];
-            //printf("ARP2: %d\n", (int)c->arp[2]);
-          }
-          break;
-
-        case 0x03:
-          if(effectdata) c->portstep = effectdata;
-          break;
-
-        case 0x04: //vibrato
-          if(effectdata & 0x0F) c->vibdepth = effectdata & 0x0F;
-          if(effectdata & 0xF0) c->vibspeed = (effectdata >> 4) & 0x0F;
-          if(!(c->vibwave&4)) c->vibpos = 0;
-          break;
-
-        case 0x06: //vibrato + volslide
-          if(!(c->vibwave&4)) c->vibpos = 0;
-        
-        case 0x07: //tremolo
-          if(effectdata)
-          {
-            c->tremdepth = effectdata & 0x0F;
-            c->tremspeed = (effectdata >> 4) & 0x0F;
-          }
-          if((c->tremwave&4)) c->trempos = 0;
-          break;
-
-        case 0x09: //set sample offset
-          c->index = (uint32_t)effectdata * 0x100;
-          break;
-
-        case 0x0B: //position jump
-          pattern = effectdata;
-          patternset = true;
-          break;
-
-        case 0x0C: //set volume
-          if(effectdata > 64) c->volume = 1.0;
-          else c->volume = effectdata / 64.0;
-          c->tempvolume = c->volume;
-          break;
-
-        case 0x0D: //row jump
-          if(delcount) break;
-          if(!patternset) pattern++;
-          row = (effectdata>>4)*10+(effectdata&0x0F);
-          if(addflag) row++; //emulate protracker EEx + Dxx bug
-          if(!offset && !overwrite) patternset = false;
-          break;
-    
-        case 0x0E:
+        switch(effectdata&0xF0)
         {
-          switch(effectdata&0xF0)
-          {
-            case 0x10:
-              c->period -= effectdata&0x0F;
-              c->tempperiod = c->period;
-              break;
+          case 0x10:
+            c->period -= effectdata&0x0F;
+            c->tempperiod = c->period;
+            break;
 
-            case 0x20:
-              c->period += effectdata&0x0F;
-              c->tempperiod = c->period;
-              break;
+          case 0x20:
+            c->period += effectdata&0x0F;
+            c->tempperiod = c->period;
+            break;
 
-            case 0x60: //jump to loop, play x times
-              if(!(effectdata & 0x0F)) c->looppoint = row;
-              else if(effectdata & 0x0F) 
+          case 0x60: //jump to loop, play x times
+            if(!(effectdata & 0x0F)) c->looppoint = row;
+            else if(effectdata & 0x0F) 
+            {
+              if(c->loopcount == -1)
               {
-                if(c->loopcount == -1)
-                {
-                  c->loopcount = (effectdata & 0x0F) - 1;
-                  row = c->looppoint;
-                }
-                else if(c->loopcount)
-                {
-                  c->loopcount--;
-                  row = c->looppoint;
-                }
-                else c->loopcount--;
+                c->loopcount = (effectdata & 0x0F);
+                row = c->looppoint;
               }
-              break;
+              else if(c->loopcount)
+              {
+                row = c->looppoint;
+              }
+              c->loopcount--;
+            }
+            break;
 
-            case 0xA0:
-              c->volume += (effectdata&0x0F)/64.0;
-              c->tempvolume = c->volume;
-              break;
+          case 0xA0:
+            c->volume += (effectdata&0x0F)/64.0;
+            c->tempvolume = c->volume;
+            break;
 
-            case 0xB0:
-              c->volume -= (effectdata&0x0F)/64.0;
-              c->tempvolume = c->volume;
-              break;
+          case 0xB0:
+            c->volume -= (effectdata&0x0F)/64.0;
+            c->tempvolume = c->volume;
+            break;
 
-            case 0xC0:
-              c->cut = effectdata&0x0F;
-              break;
+          case 0xC0:
+            c->cut = effectdata&0x0F;
+            break;
 
-            case 0xE0: //delay pattern x notes
-              if(!delset) delcount = effectdata&0x0F;
-              delset = true;
-              /*emulate bug that causes protracker to cause Dxx to jump
-              too far when used in conjunction with EEx*/
-              addflag = true;
-              break;
+          case 0xE0: //delay pattern x notes
+            if(!delset) delcount = effectdata&0x0F;
+            delset = true;
+            /*emulate bug that causes protracker to cause Dxx to jump
+            too far when used in conjunction with EEx*/
+            addflag = true;
+            break;
 
-            case 0xF0:
-              c->funkspeed = funktable[effectdata&0x0F];
-              break;
+          case 0xF0:
+            c->funkspeed = funktable[effectdata&0x0F];
+            break;
 
-            default:
-              break;
-          }
+          default:
+            break;
         }
-
-      default:
-         break;
       }
+
+    default:
+       break;
     }
 
     if(c->tempperiod == 0 || c->sample == NULL || c->sample->length == 0)
       c->stop = true;
   }
   else if (c->deltick == 0) processnoteeffects(c, data);
-  if(c->deltick) c->deltick--;
+  //if(c->deltick) c->deltick--;
   if(c->retrig && globaltick == c->retrig-1)
   {
     c->index = 0;
@@ -686,6 +692,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   {
     c->tempperiod = c->period;
     //c->tempvolume = c->volume;
+    c->deltick = 0;
   }
 }
 
@@ -772,6 +779,7 @@ void steptick(channel* cp)
 
   if(globaltick == 0)
   {
+    patternset = false;
     curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
     currow = row;
     preprocesseffects(curdata);
@@ -781,6 +789,7 @@ void steptick(channel* cp)
     gm->speed = nextspeed;
     gm->tempo = nexttempo;
     ticktime = nextticktime;
+    printf("pattern: %d, row: %d\n", pattern, row);
   }
 
 
