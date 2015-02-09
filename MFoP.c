@@ -494,10 +494,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           if(delcount) break;
           if(!patternset) pattern++;
           row = (effectdata>>4)*10+(effectdata&0x0F);
-          if(addflag)
-          {
-            row++;
-          }
+          if(addflag) row++; //emulate protracker EEx + Dxx bug
           if(!offset && !overwrite) patternset = false;
           break;
     
