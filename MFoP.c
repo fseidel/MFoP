@@ -166,7 +166,7 @@ void precalculatetables()
   {
     cursin = sin(i*2*M_PI/64.0);
     sine[i] = 255*cursin;
-    saw[i] = -255*((i/64.0) - floor((i/64.0) + 0.5));
+    saw[i] = 255-(8*i);
     square[i] = (i<32)?255:-256;
     randwave[i] = (int8_t)(rand()%256);
   }
