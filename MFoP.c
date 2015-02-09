@@ -422,9 +422,14 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       {
         if(tempeffect != 0x03 && tempeffect != 0x05)
         {
+          if(tempeffect == 0x09)
+          {
+            if(effectdata) c->offsetmem = effectdata * 0x100;
+            c->offset += c->offsetmem;
+          }
           c->period = period;
           c->tempperiod = period;
-          c->index = 0;
+          c->index = c->offset;
           c->stop = false;
           c->repeat = false;
           if(!(c->vibwave & 4)) c->vibpos = 0;
@@ -482,10 +487,9 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         break;
 
       case 0x09: //set sample offset
-        if(effectdata) c->offsetmem = effectdata * 0x100;
+        /*if(effectdata) c->offsetmem = effectdata * 0x100;
         c->offset += c->offsetmem;
-        //else c->offset += effectdata * 0x100;
-        c->index = c->offset;
+        c->index = c->offset;*/
         break;
 
       case 0x0B: //position jump
