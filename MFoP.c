@@ -40,6 +40,8 @@ float* mixbuf;
 
 int pattern;
 int row;
+int currow;
+bool addflag; //used for emualting obscure Dxx bug
 uint8_t* curdata;
 bool done;
 int libsrc_error;
@@ -217,11 +219,13 @@ channel* initsound()
     channels[i].cdata->output_frames = SAMPLE_RATE*0.02;
     channels[i].cdata->end_of_input = 0;
     row = 0;
+    currow = 0;
     pattern = 0;
     delset = false;
     inrepeat = false;
     delcount = 0;
     globaltick = 0;
+    addflag = false;
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
@@ -369,11 +373,6 @@ void processnoteeffects(channel* c, uint8_t* data)
         case 0xC0: //cut from note + x vblanks
           if(globaltick == (effectdata&0x0F)) c->volume = 0.0;
           break;
-
-        case 0xE0: //delay pattern x notes
-          if(!delset) delcount = effectdata&0x0F;
-          delset = true;
-          break;
       }
       break;
     }
@@ -492,8 +491,13 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           break;
 
         case 0x0D: //row jump
+          if(delcount) break;
           if(!patternset) pattern++;
-          row = (effectdata>>4)*10+(effectdata&0x0F) - 1;
+          row = (effectdata>>4)*10+(effectdata&0x0F);
+          if(addflag)
+          {
+            row++;
+          }
           if(!offset && !overwrite) patternset = false;
           break;
     
@@ -518,12 +522,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
                 if(c->loopcount == -1)
                 {
                   c->loopcount = (effectdata & 0x0F) - 1;
-                  row = c->looppoint-1;
+                  row = c->looppoint;
                 }
                 else if(c->loopcount)
                 {
                   c->loopcount--;
-                  row = c->looppoint-1;
+                  row = c->looppoint;
                 }
                 else c->loopcount--;
               }
@@ -541,6 +545,14 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
             case 0xC0:
               c->cut = effectdata&0x0F;
+              break;
+
+            case 0xE0: //delay pattern x notes
+              if(!delset) delcount = effectdata&0x0F;
+              delset = true;
+              /*emulate bug that causes protracker to cause Dxx to jump
+              too far when used in conjunction with EEx*/
+              addflag = true;
               break;
 
             case 0xF0:
@@ -764,6 +776,7 @@ void steptick(channel* cp)
   if(globaltick == 0)
   {
     curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
+    currow = row;
     preprocesseffects(curdata);
     preprocesseffects(curdata + 4);
     preprocesseffects(curdata + 8);
@@ -790,8 +803,9 @@ void steptick(channel* cp)
     else
     {
       delset = false;
+      addflag = false;
       inrepeat = false;
-      row++;
+      if(currow == row) row++;
     }
     globaltick = 0;
   }
