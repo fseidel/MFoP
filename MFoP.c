@@ -427,7 +427,8 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->index = 0;
           c->stop = false;
           c->repeat = false;
-          //c->offset = 0;
+          if(!(c->vibwave & 4)) c->vibpos = 0;
+          if(!(c->tremwave & 4)) c->trempos = 0;
         }
         c->portdest = period;
         //c->arp[0] = c->period;
@@ -464,11 +465,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         c->period = c->portdest;
         c->tempperiod = c->period;
         Seriously*/
-        if(c->vibwave&4) c->vibpos = 0;
+        //if(c->vibwave&4) c->vibpos = 0;
         break;
 
       case 0x06: //vibrato + volslide
-        if(c->vibwave&4) c->vibpos = 0;
+        //if(c->vibwave&4) c->vibpos = 0;
+        break;
       
       case 0x07: //tremolo
         if(effectdata)
