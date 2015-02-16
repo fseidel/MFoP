@@ -323,22 +323,14 @@ void processnoteeffects(channel* c, uint8_t* data)
       c->trempos %= 64;
       break;
 
-    //Set panning doesn't do anything in a standard Amiga MOD
-    case 0x08: //set panning
-      break;
-
     case 0x0A: //volume slide
+      //if(effectdata == 0x94) c->volume = 0.9;
       //slide up
       if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
       //slide down
       else c->volume -= effectdata/64.0;
       c->tempvolume = c->volume;
       break;
-
-    //0x0B already taken care of by preprocesseffects()
-
-
-    //0x0D already taken care of by preprocesseffects()
 
     case 0x0E: //E commands
     {
@@ -472,10 +464,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         Seriously*/
         //if(c->vibwave&4) c->vibpos = 0;
         break;
-
-      case 0x06: //vibrato + volslide
-        //if(c->vibwave&4) c->vibpos = 0;
-        break;
       
       case 0x07: //tremolo
         if(effectdata)
@@ -484,12 +472,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->tremspeed = (effectdata >> 4) & 0x0F;
         }
         if(c->tremwave&4) c->trempos = 0;
-        break;
-
-      case 0x09: //set sample offset
-        /*if(effectdata) c->offsetmem = effectdata * 0x100;
-        c->offset += c->offsetmem;
-        c->index = c->offset;*/
         break;
 
       case 0x0B: //position jump
@@ -595,6 +577,10 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   //RESAMPLE PER TICK
 
   int writesize = SAMPLE_RATE*ticktime;
+  if(c->volume < 0.0) c->volume = 0.0;
+  else if(c->volume > 1.0) c->volume = 1.0;
+  if(c->period > 856) c->period = 856;
+  else if(c->period < 113) c->period = 113;
 
   if(c->tempvolume < 0.0) c->tempvolume = 0.0;
   else if(c->tempvolume > 1.0) c->tempvolume = 1.0;
@@ -795,7 +781,7 @@ void steptick(channel* cp)
     gm->speed = nextspeed;
     gm->tempo = nexttempo;
     ticktime = nextticktime;
-    printf("pattern: %d, row: %d\n", pattern, row);
+    //printf("pattern: %d, row: %d\n", pattern, row);
   }
 
 
@@ -933,8 +919,8 @@ int main(int argc, char *argv[])
       {
         float l = *in++;
         float r = *in++;
-        *out++ = l+0.4*r;
-        *out++ = r+0.4*l;
+        *out++ = l+0.5*r;
+        *out++ = r+0.5*l;
       }
       pa_error = Pa_WriteStream(stream, mixbuf, ticktime*SAMPLE_RATE);
     }
