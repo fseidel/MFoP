@@ -71,8 +71,8 @@ typedef struct {
 
 typedef struct{
   sample* sample;
-  double volume;
-  double tempvolume;
+  int8_t volume;
+  int8_t tempvolume;
   uint32_t index;
   float* buffer;
   float* resampled;
@@ -184,8 +184,8 @@ channel* initsound()
   audiobuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   for(int i = 0; i < 4; i++)
   {
-    channels[i].volume = 0.0;
-    channels[i].tempvolume = 0.0;
+    channels[i].volume = 0;
+    channels[i].tempvolume = 0;
     channels[i].deltick = 0;
     channels[i].increment = 0.0f;
     channels[i].buffer = malloc(PAL_CLOCK*sizeof(float));
@@ -282,9 +282,9 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     case 0x05: //tone portamento + volume slide
       //slide up
-      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
+      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F);
       //slide down
-      else c->volume -= effectdata/64.0;
+      else c->volume -= effectdata;
       c->tempvolume = c->volume;
       //exploit fallthrough
 
@@ -300,9 +300,9 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     case 0x06: //vibrato + volume slide
       //slide up
-      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
+      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F);
       //slide down
-      else c->volume -= effectdata/64.0;
+      else c->volume -= effectdata;
       c->tempvolume = c->volume;
       //exploit fallthrough
 
@@ -316,19 +316,17 @@ void processnoteeffects(channel* c, uint8_t* data)
 
     case 0x07: //tremolo
       c->tempvolume = c->volume +
-        (double)(((int16_t)c->tremdepth*
-          (waves[c->tremwave&3][c->trempos])))/4096.0;
+        (((int16_t)c->tremdepth*waves[c->tremwave&3][c->trempos])>>6);
       c->trempos += c->tremspeed;
         //c->trempos += 1;
       c->trempos %= 64;
       break;
 
     case 0x0A: //volume slide
-      //if(effectdata == 0x94) c->volume = 0.9;
       //slide up
-      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F)/64.0;
+      if(effectdata&0xF0) c->volume += ((effectdata>>4) & 0x0F);
       //slide down
-      else c->volume -= effectdata/64.0;
+      else c->volume -= effectdata;
       c->tempvolume = c->volume;
       break;
 
@@ -365,7 +363,7 @@ void processnoteeffects(channel* c, uint8_t* data)
           break;
 
         case 0xC0: //cut from note + x vblanks
-          if(globaltick == (effectdata&0x0F)) c->volume = 0.0;
+          if(globaltick == (effectdata&0x0F)) c->volume = 0;
           break;
       }
       break;
@@ -406,7 +404,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         if(tempeffect != 0x03 && tempeffect != 0x05) c->offset = 0;
         //sample* prevsam = c->sample;
         c->sample = gm->samples[tempsam];
-        c->volume = (double)c->sample->volume / 64.0;
+        c->volume = c->sample->volume;
         c->tempvolume = c->volume;
       }
       //printf("FINETUNE: %f\n", (double)(c->sample->finetune));
@@ -475,8 +473,8 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         break;
 
       case 0x0C: //set volume
-        if(effectdata > 64) c->volume = 1.0;
-        else c->volume = effectdata / 64.0;
+        if(effectdata > 64) c->volume = 64;
+        else c->volume = effectdata;
         c->tempvolume = c->volume;
         break;
 
@@ -517,12 +515,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
             break;
 
           case 0xA0:
-            c->volume += (effectdata&0x0F)/64.0;
+            c->volume += (effectdata&0x0F);
             c->tempvolume = c->volume;
             break;
 
           case 0xB0:
-            c->volume -= (effectdata&0x0F)/64.0;
+            c->volume -= (effectdata&0x0F);
             c->tempvolume = c->volume;
             break;
 
@@ -568,13 +566,11 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   //RESAMPLE PER TICK
 
   int writesize = SAMPLE_RATE*ticktime;
-  if(c->volume < 0.0) c->volume = 0.0;
-  else if(c->volume > 1.0) c->volume = 1.0;
-  if(c->period > 856) c->period = 856;
-  else if(c->period < 113) c->period = 113;
+  if(c->volume < 0) c->volume = 0;
+  else if(c->volume > 64) c->volume = 64;
 
-  if(c->tempvolume < 0.0) c->tempvolume = 0.0;
-  else if(c->tempvolume > 1.0) c->tempvolume = 1.0;
+  if(c->tempvolume < 0) c->tempvolume = 0;
+  else if(c->tempvolume > 64) c->tempvolume = 64;
   if(c->tempperiod > 856) c->tempperiod = 856;
   else if(c->tempperiod < 113) c->tempperiod = 113;
   
@@ -617,7 +613,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     for(int i = 0; i < ticktime*rate-1; i++)
     {
       c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f 
-        * c->tempvolume * 0.4f;
+        * c->tempvolume/64.0 * 0.4f;
 
       if(c->repeat && (c->index >= (c->sample->repeatlength)*2
         + (c->sample->repeatpoint)*2))
