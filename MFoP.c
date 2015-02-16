@@ -438,16 +438,10 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         {
           c->period = c->portdest;
           int base = findperiod(c->period);
-          if(base == -1)
-          {
-            break;
-          }
+          if(base == -1) break;
           c->arp[0] = c->period;
-          //printf("ARP0: %d\n", (int)c->arp[0]);
           c->arp[1] = periods[base+((effectdata>>4)&0x0F)];
-          //printf("ARP1: %d\n", (int)c->arp[1]);
           c->arp[2] = periods[base+(effectdata&0x0F)];
-          //printf("ARP2: %d\n", (int)c->arp[2]);
         }
         break;
 
@@ -517,10 +511,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
                 c->loopcount = (effectdata & 0x0F);
                 row = c->looppoint;
               }
-              else if(c->loopcount)
-              {
-                row = c->looppoint;
-              }
+              else if(c->loopcount) row = c->looppoint;
               c->loopcount--;
             }
             break;
@@ -557,7 +548,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       }
 
     default:
-       break;
+      break;
     }
 
     if(c->tempperiod == 0 || c->sample == NULL || c->sample->length == 0)
