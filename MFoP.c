@@ -359,7 +359,8 @@ void processnoteeffects(channel* c, uint8_t* data)
         //There's no effect 0xE8 (is 8 evil or something?)
 
         case 0x90: //retrigger note + x vblanks (ticks)
-          if(globaltick % (effectdata&0x0F) == 0) c->index = 0;
+          if(((effectdata&0x0F) == 0) || 
+            (globaltick % (effectdata&0x0F)) == 0) c->index = 0;
           break;
 
         case 0xC0: //cut from note + x vblanks
