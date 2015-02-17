@@ -360,7 +360,7 @@ void processnoteeffects(channel* c, uint8_t* data)
 
         case 0x90: //retrigger note + x vblanks (ticks)
           if(((effectdata&0x0F) == 0) || 
-            (globaltick % (effectdata&0x0F)) == 0) c->index = 0;
+            (globaltick % (effectdata&0x0F)) == 0) c->index = c->offset;
           break;
 
         case 0xC0: //cut from note + x vblanks
