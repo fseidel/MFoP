@@ -10,7 +10,7 @@
 #include <samplerate.h>
 #include <math.h>
 #include <portaudio.h>
-#include <time.h>
+//#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -26,11 +26,11 @@ uint16_t periods[] = {
 uint8_t funktable[] = {
   0,5,6,7,8,10,11,13,16,19,22,26,32,43,64,128};
 
-int16_t* waves[4];
+int16_t* waves[3];
 int16_t sine[64];
 int16_t saw[64];
 int16_t square[64];
-int16_t randwave[64];
+//int16_t randwave[64];
 
 long filelength;
 bool loop;
@@ -155,20 +155,19 @@ void portaudioerror(int err)
 
 void precalculatetables()
 {
-  //formulas from http://stackoverflow.com/questions/3387159/actionscript-creating-square-triangle-sawtooth-waves-from-math-sin
   double cursin;
-  srand(time(NULL));
+  //srand(time(NULL));
   waves[0] = sine;
   waves[1] = saw;
   waves[2] = square;
-  waves[3] = randwave;
+  //waves[3] = randwave;
   for(int i = 0; i < 64; i++)
   {
     cursin = sin(i*2*M_PI/64.0);
     sine[i] = 255*cursin;
     saw[i] = 255-(8*i);
     square[i] = (i<32)?255:-256;
-    randwave[i] = (int8_t)(rand()%256);
+    //randwave[i] = (int8_t)(rand()%256);
   }
 }
 
@@ -423,8 +422,10 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->index = c->offset;
           c->stop = false;
           c->repeat = false;
-          if(!(c->vibwave & 4)) c->vibpos = 0;
-          if(!(c->tremwave & 4)) c->trempos = 0;
+          /*if(!(c->vibwave & 4)) c->vibpos = 0;
+          if(!(c->tremwave & 4)) c->trempos = 0;*/
+          c->vibpos = 0;
+          c->trempos = 0;
         }
         c->portdest = period;
         //c->arp[0] = c->period;
@@ -464,7 +465,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->tremdepth = effectdata & 0x0F;
           c->tremspeed = (effectdata >> 4) & 0x0F;
         }
-        if(c->tremwave&4) c->trempos = 0;
+        //if(c->tremwave&4) c->trempos = 0;
         break;
 
       case 0x0B: //position jump
@@ -482,6 +483,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       case 0x0D: //row jump
         if(delcount) break;
         if(!patternset) pattern++;
+        if(pattern >= gm->songlength) pattern = 0;
         row = (effectdata>>4)*10+(effectdata&0x0F);
         if(addflag) row++; //emulate protracker EEx + Dxx bug
         if(!offset && !overwrite) patternset = false;

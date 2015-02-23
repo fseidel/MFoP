@@ -2,7 +2,7 @@ MFoP
 =====
 Welcome!
 
-MFoP (Mod Files on Pizza) is a free (GPLv3), portable Amiga ProTracker mod player written in C. It is designed to be fast, small (Mac binary is under 28KiB!), lightweight, and, most importantly, as accurate as possible to the original ProTracker. This means that ProTracker bugs are emulated in order to facilitate higher compatibility and accuracy.
+MFoP (Mod Files on Pizza) is a free (GPLv3), portable Amiga ProTracker mod player written in C. It is designed to be fast, small (Mac binary is under 20KiB!), lightweight, and, most importantly, as accurate as possible to the original ProTracker. This means that ProTracker bugs are emulated in order to facilitate higher compatibility and accuracy than other players.
 Currently, MFoP should support all 4 channel 15/31 instrument Amiga mod files, as well as all effects except E3x and E0x. Give it a try!
 
 You'll need to build MFoP with PortAudio and libsamplerate.
