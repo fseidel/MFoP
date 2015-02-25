@@ -122,10 +122,22 @@ channel* gcp;
 
 int findperiod(uint16_t period)
 {
-  for(int i = 0; i < 36; i++) 
-    if(periods[i] == period) return i;
-  //printf("PERIOD TABLE LOOKUP ERROR: %d\n", period);
+  if(period > 856 || period < 113) return -1;
+  uint8_t upper = 35;
+  uint8_t lower = 0;
+  uint8_t mid;
+  while(upper >= lower)
+  {
+    mid = (upper+lower)/2;
+    if(periods[mid] == period) return mid;
+    else if(periods[mid] > period) lower = mid+1;
+    else upper = mid-1;
+  }
   return -1;
+  /*for(int i = 0; i < 36; i++) 
+    if(periods[i] == period) return i;
+  //printw("PERIOD TABLE LOOKUP ERROR: %d\n", period);
+  return -1;*/
 }
 
 static inline double calcrate(uint16_t period, int8_t finetune)
