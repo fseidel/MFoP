@@ -450,10 +450,18 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         {
           c->period = c->portdest;
           int base = findperiod(c->period);
-          if(base == -1) break;
+          if(base == -1)
+          {
+            c->arp[0] = c->period;
+            c->arp[1] = c->period;
+            c->arp[2] = c->period;
+            break;
+          }
+          uint8_t step1 = base+((effectdata>>4)&0x0F);
+          uint8_t step2 = base+(effectdata&0x0F);
           c->arp[0] = c->period;
-          c->arp[1] = periods[base+((effectdata>>4)&0x0F)];
-          c->arp[2] = periods[base+(effectdata&0x0F)];
+          c->arp[1] = periods[step1>35?35:step1];
+          c->arp[2] = periods[step2>35?35:step2];
         }
         break;
 
