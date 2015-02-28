@@ -46,7 +46,7 @@ int16_t square[64];
 char* displaypatterns;
 //int16_t randwave[64];
 
-long filelength;
+off_t filelength;
 bool loop;
 bool headphones;
 float* audiobuf;
@@ -808,6 +808,8 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
       s->inverted = false;
       //s->sampledata = malloc(copylen*sizeof(float));
       s->sampledata = malloc(copylen*sizeof(int8_t));
+
+      if ((start + copylen) > filelength) abort();
       //floatncpy(s->sampledata, (int8_t*)(filearr+start), copylen);
       memcpy(s->sampledata, (int8_t*)(filearr+start), copylen);
       start += copylen;
