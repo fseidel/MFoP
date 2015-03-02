@@ -285,16 +285,16 @@ void renderpattern(uint8_t* patterndata)
       //tempsam = tempsam;
       //if(period) sprintf((displaypatterns+49*line+chan*12), "%03x ", period);
       if(period)
-        sprintf((displaypatterns+49*line+chan*12), "%s ", 
+        sprintf((displaypatterns+48*line+chan*12), "%s ", 
           notes[findperiod(period)]);
-      else sprintf((displaypatterns+49*line+chan*12), "    ");
-      if(tempsam) sprintf((displaypatterns+49*line+chan*12+4),
+      else sprintf((displaypatterns+48*line+chan*12), "    ");
+      if(tempsam) sprintf((displaypatterns+48*line+chan*12+4),
         "%2X ", tempsam);
-      else sprintf((displaypatterns+49*line+chan*12+4), "   ");
+      else sprintf((displaypatterns+48*line+chan*12+4), "   ");
       if(tempeffect || effectdata)
-        sprintf((displaypatterns+49*line+chan*12+7), "%03X| ",
+        sprintf((displaypatterns+48*line+chan*12+7), "%03X| ",
           ((uint16_t)tempeffect<<8)|effectdata);
-      else sprintf((displaypatterns+49*line+chan*12+7), "   | ");
+      else sprintf((displaypatterns+48*line+chan*12+7), "   | ");
     }
     //wprintw(patternwin, "%s\n", displaypatterns+line*49);
     //wrefresh(patternwin);
@@ -859,11 +859,6 @@ void steptick(channel* cp)
   }*/
   if(globaltick == 0)
   {
-    /*printw("%08x ", *curdata);
-    printw("%08x ", *(curdata + 4));
-    printw("%08x ", *(curdata + 8));
-    printw("%08x \n", *(curdata + 12));*/
-    //printw("\n");
     mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  BPM: %d\n", 
       pattern, gm->patternlist[pattern], row, gm->speed, gm->tempo);
     if(pattern != curpattern)
@@ -873,13 +868,13 @@ void steptick(channel* cp)
       if(line == 0)
       {
         wattron(patternwin, A_REVERSE);
-        mvwprintw(patternwin, 7+line, 1, displaypatterns+(row+line)*49);
+        mvwprintw(patternwin, 7+line, 1, "%s", displaypatterns+(row+line)*48);
         wattroff(patternwin, A_REVERSE);
       }
       else if(row+line < 64 && row+line >= 0)
-        mvwprintw(patternwin, 7+line, 1, displaypatterns+(row+line)*49);
+        mvwaddstr(patternwin, 7+line, 1, displaypatterns+(row+line)*48);
       else
-        mvwprintw(patternwin, 7+line, 1, "          |           |           |           ");
+        mvwaddstr(patternwin, 7+line, 1, "          |           |           |           ");
     }
     box(patternwin, 0, 0);
     wrefresh(patternwin);
@@ -1013,7 +1008,7 @@ int main(int argc, char *argv[])
   if(filelength <= 0) goto fileerror;
   fseek(f, 0L,SEEK_SET);
   initscr();
-  printw("MFoP 1.1: A tiny ProTracker MOD player\nProgrammed with love by Ford Seidel\n");
+  printw("MFoP 1.1.1: A tiny ProTracker MOD player\nBaked with love\n");
   refresh();
   patternwin = newwin(20, 48, 5, 0);
   //instrwin = newwin()
