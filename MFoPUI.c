@@ -783,8 +783,8 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 
     if(i+5 < LINES)
     {
-      if(s->name[0]) mvprintw(i+5, 52, "%02X %s", i, s->name);
-      else mvprintw(i+5, 52, "%02X", i);
+      if(s->name[0]) mvprintw(i+5, 52, "%02X %s", i+1, s->name);
+      else mvprintw(i+5, 52, "%02X", i+1);
     }
 
     //printw("length: %d\n", s->length);
@@ -868,13 +868,13 @@ void steptick(channel* cp)
       if(line == 0)
       {
         wattron(patternwin, A_REVERSE);
-        mvwprintw(patternwin, 7+line, 1, "%s", displaypatterns+(row+line)*48);
+        mvwprintw(patternwin, 7+line, 1, " %s", displaypatterns+(row+line)*48);
         wattroff(patternwin, A_REVERSE);
       }
       else if(row+line < 64 && row+line >= 0)
-        mvwaddstr(patternwin, 7+line, 1, displaypatterns+(row+line)*48);
+        mvwprintw(patternwin, 7+line, 1, " %s", displaypatterns+(row+line)*48);
       else
-        mvwaddstr(patternwin, 7+line, 1, "          |           |           |           ");
+        mvwaddstr(patternwin, 7+line, 1, "           |           |           |           ");
     }
     box(patternwin, 0, 0);
     wrefresh(patternwin);
@@ -1010,7 +1010,7 @@ int main(int argc, char *argv[])
   initscr();
   printw("MFoP 1.1.1: A tiny ProTracker MOD player\nBaked with love\n");
   refresh();
-  patternwin = newwin(20, 48, 5, 0);
+  patternwin = newwin(20, 49, 5, 0);
   //instrwin = newwin()
   box(patternwin, 0, 0);
 
