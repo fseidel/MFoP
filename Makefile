@@ -1,4 +1,9 @@
-CC=gcc
+ifeq ($(shell uname), Darwin)
+	CC=clang
+else
+	CC=gcc
+endif
+
 CFLAGS=-std=c99 -pedantic -Wall -Werror -Wextra -O3
 INCLUDES=-I/opt/local/include
 LIBS=-L/opt/local/lib

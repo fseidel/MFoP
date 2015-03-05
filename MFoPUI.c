@@ -10,13 +10,12 @@
 #include <samplerate.h>
 #include <math.h>
 #include <portaudio.h>
-//#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ncurses.h>
 
 static uint32_t const PAL_CLOCK = 3546895;
-static double const SAMPLE_RATE = 44100;
+static double const SAMPLE_RATE = 48000;
 static double const FINETUNE_BASE = 1.0072382087;
 
 uint16_t periods[] = {
@@ -36,7 +35,7 @@ uint8_t funktable[] = {
   0,5,6,7,8,10,11,13,16,19,22,26,32,43,64,128};
 
 WINDOW* patternwin;
-WINDOW* instrwin;
+//WINDOW* instrwin;
 
 int16_t* waves[3];
 int16_t sine[64];
@@ -71,6 +70,7 @@ double ticktime;
 double nextticktime;
 uint8_t nexttempo;
 uint8_t nextspeed;
+uint8_t numsamples;
 uint8_t type;
 
 typedef struct {
@@ -96,7 +96,7 @@ typedef struct{
   bool stop;
   uint8_t deltick;
   uint16_t period;
-  uint16_t* arp;
+  uint16_t arp[3];
   uint16_t portdest;
   uint16_t tempperiod;
   uint8_t portstep;
@@ -219,7 +219,7 @@ channel* initsound()
     channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
     channels[i].repeat = false;
-    channels[i].arp = malloc(3*sizeof(uint16_t));
+    //channels[i].arp = malloc(3*sizeof(uint16_t));
     channels[i].period = 0;
     channels[i].portdest = 0;
     channels[i].tempperiod = 0;
@@ -764,7 +764,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
 void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 {
-  uint8_t numsamples = type?15:31;
+  
   for(int i = 0; i < numsamples; i++)
   {
     sample* s = malloc(sizeof(sample));
@@ -791,10 +791,7 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
     if (s->length != 0)
     {
       int8_t tempfinetune = filearr[44 + 30 * i]&0x0F;
-      if(tempfinetune > 0x07)
-      {
-        tempfinetune |= 0xF0;
-      }
+      if(tempfinetune > 0x07) tempfinetune |= 0xF0;
       s->finetune = tempfinetune;
       s->volume = filearr[45 + 30 * i];
 
@@ -820,9 +817,6 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 
 void steptick(channel* cp)
 {
-  //gm->speed = nextspeed;
-  //gm->tempo = nexttempo;
-  //ticktime = nextticktime;
   if(row == 64)
   { 
     row = 0;
@@ -830,7 +824,6 @@ void steptick(channel* cp)
     /*if(pattern < gm->songlength)
       renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);*/
   }
-  //printw("Pattern: %d\n", pattern);
   if(pattern >= gm->songlength)
   {
     if(loop)
@@ -853,10 +846,6 @@ void steptick(channel* cp)
     }
   }
 
-  /*for(int i = 0; i < 6; i++)
-  {
-    if((row + i) < 64) printw("%s \n", (displaypatterns+row+i)*12);
-  }*/
   if(globaltick == 0)
   {
     mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  BPM: %d\n", 
@@ -880,7 +869,6 @@ void steptick(channel* cp)
     wrefresh(patternwin);
     refresh();
     
-    //if(patternset) renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);
     patternset = false;
     curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
     currow = row;
@@ -892,7 +880,6 @@ void steptick(channel* cp)
     gm->speed = nextspeed;
     gm->tempo = nexttempo;
     ticktime = nextticktime;
-    //printw("pattern: %d, row: %d\n", pattern, row);
   }
 
 
@@ -926,9 +913,7 @@ modfile* modparse(FILE* f)
   int seek = 0;
   int c;
   while((c = fgetc(f)) != EOF)
-  {
     filearr[seek++] = (uint8_t)c;
-  }
   modfile* m = malloc(sizeof(modfile));
   strncpy((char*)m->name, (char*)filearr, 20);
   m->name[20] = '\x00';
@@ -941,6 +926,8 @@ modfile* modparse(FILE* f)
     type = 1;
   }
   else type = 0;
+  
+  numsamples = type?15:31;
   //printw("magic string%s\n", m->magicstring);
   if (type == 0) m->songlength = filearr[950];
   else m->songlength = filearr[470];
@@ -1008,14 +995,13 @@ int main(int argc, char *argv[])
   if(filelength <= 0) goto fileerror;
   fseek(f, 0L,SEEK_SET);
   initscr();
-  printw("MFoP 1.1.1: A tiny ProTracker MOD player\nBaked with love\n");
+  curs_set(0);
+  printw("MFoP 1.1.2: A tiny ProTracker MOD player\nBaked with love\n");
   refresh();
   patternwin = newwin(20, 49, 5, 0);
   //instrwin = newwin()
   box(patternwin, 0, 0);
 
-  //wrefresh(patternwin);
-  //printw("Test");
   //allocate buffer for pattern viewer (includes null byte at end of line)
   displaypatterns = malloc(3136*sizeof(char));
   gm = modparse(f);
@@ -1031,9 +1017,30 @@ int main(int argc, char *argv[])
   curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
   renderpattern(gm->patterns + gm->patternlist[pattern]*1024);
   mvprintw(3, 0, "Title: %s", gm->name);
+  noecho();
+  bool pause = false;
+  nodelay(stdscr, true);
+  char c;
   while(!done)
   {
-    //if(getch() == 'q') done = true;
+    input_loop:
+    c = getch();
+    switch (c)
+    {
+      case 'q':
+        done = true;
+        pause = false;
+        break;
+      case 'h':
+        headphones = !headphones;
+        break;
+      case 'p':
+        pause = !pause;
+        nodelay(stdscr, !pause);
+        break;
+      }
+      if(pause) goto input_loop;
+      
     //break; 
     steptick(gcp);
     if(headphones)
@@ -1056,19 +1063,34 @@ int main(int argc, char *argv[])
       portaudioerror(pa_error);
   }
 
-  pa_error = Pa_StopStream(stream);
   for(int i = 0; i < 4; i++)
   {
     src_delete(gcp[i].converter);
+    free(gcp[i].buffer);
+    free(gcp[i].resampled);
+    free(gcp[i].cdata);
   }
-
+  free(gcp);
+  free(audiobuf);
+  free(mixbuf);
+  for(int i = 0; i < numsamples; i++)
+  {
+    if(gm->samples[i]->length) free(gm->samples[i]->sampledata);
+    free(gm->samples[i]);
+  }
+  free(gm->patterns);
+  free(gm);
+  free(displaypatterns);
+  pa_error = Pa_StopStream(stream);
+  if(pa_error != paNoError) portaudioerror(pa_error);
+  pa_error = Pa_CloseStream(stream);
+  if(pa_error != paNoError) portaudioerror(pa_error);
+  pa_error = Pa_Terminate();
   if(pa_error != paNoError) portaudioerror(pa_error);
   endwin();
   return 0;
 
   fileerror:
-  {
     printf("Please specify a valid mod file.\n");
     return 1;
-  }
 }
