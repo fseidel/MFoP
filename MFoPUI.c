@@ -820,7 +820,7 @@ void steptick(channel* cp)
   if(row == 64)
   { 
     row = 0;
-    pattern++;
+    if(pattern == curpattern) pattern++;
     /*if(pattern < gm->songlength)
       renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);*/
   }
