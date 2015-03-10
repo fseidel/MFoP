@@ -996,7 +996,7 @@ int main(int argc, char *argv[])
   fseek(f, 0L,SEEK_SET);
   initscr();
   curs_set(0);
-  printw("MFoP 1.1.2: A tiny ProTracker MOD player\nBaked with love\n");
+  printw("MFoP 1.1.3: A tiny ProTracker MOD player\nBaked with love\n");
   refresh();
   patternwin = newwin(20, 49, 5, 0);
   //instrwin = newwin()
