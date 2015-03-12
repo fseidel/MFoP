@@ -454,7 +454,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 {
   uint8_t tempeffect = *(data+2)&0x0F;
   uint8_t effectdata = *(data+3);
-  if(tempeffect == 0x0E && (effectdata&0xF0) == 0xD0) 
+  if(globaltick == 0 && tempeffect == 0x0E && (effectdata&0xF0) == 0xD0)
       c->deltick = effectdata&0x0F;
   if(globaltick == c->deltick)
   {
@@ -563,14 +563,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       case 0x0D: //row jump
         if(delcount) break;
         if(!patternset)
-        {
           pattern++;
-          //renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);
-        }
         if(pattern >= gm->songlength) pattern = 0;
         row = (effectdata>>4)*10+(effectdata&0x0F);
+        patternset = true;
         if(addflag) row++; //emulate protracker EEx + Dxx bug
-        if(!offset && !overwrite) patternset = false;
+        //if(!offset && !overwrite) patternset = false;
         break;
   
       case 0x0E:
@@ -709,9 +707,9 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       }
       else if(c->index >= (c->sample->length)*2)
       {
-        if(c->sample->repeatlength > 2)
+        if(c->sample->repeatlength > 1)
         {
-          c->index = c->sample->repeatpoint * 2;
+          c->index = c->sample->repeatpoint*2;
           c->repeat = true;
         }
         else
@@ -848,7 +846,7 @@ void steptick(channel* cp)
 
   if(globaltick == 0)
   {
-    mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  BPM: %d\n", 
+    mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  tempo: %d\n", 
       pattern, gm->patternlist[pattern], row, gm->speed, gm->tempo);
     if(pattern != curpattern)
       renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);
