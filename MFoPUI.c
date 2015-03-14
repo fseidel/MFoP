@@ -80,7 +80,6 @@ typedef struct {
   uint8_t volume;
   uint16_t repeatpoint;
   uint16_t repeatlength;
-  bool inverted;
   int8_t* sampledata;
 } sample;
 
@@ -257,7 +256,7 @@ channel* initsound()
   }         
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
-                                  SAMPLE_RATE*0.02, NULL,
+                                  paFramesPerBufferUnspecified, NULL,
                                   audiobuf);
   
   if(pa_error != paNoError) portaudioerror(pa_error);
@@ -309,7 +308,7 @@ void preprocesseffects(uint8_t* data)
   if ((*(data+2)&0x0F) == 0x0F) //set speed/tempo
   {
     uint8_t effectdata = *(data+3);
-    if(effectdata == 0) return;
+    //if(effectdata == 0) return;
     if(effectdata > 0x1F)
     {
       gm->tempo = effectdata;
@@ -435,7 +434,11 @@ void processnoteeffects(channel* c, uint8_t* data)
       break;
     }
     case 0x0F:
-      if(effectdata == 0) break;
+      if(effectdata == 0)
+      {
+        done = true;
+        break;
+      }
       if(effectdata > 0x1F)
       {
         nexttempo = effectdata;
@@ -455,7 +458,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   uint8_t tempeffect = *(data+2)&0x0F;
   uint8_t effectdata = *(data+3);
   if(globaltick == 0 && tempeffect == 0x0E && (effectdata&0xF0) == 0xD0)
-      c->deltick = effectdata&0x0F;
+      c->deltick = (effectdata&0x0F)%gm->speed;
   if(globaltick == c->deltick)
   {
     uint16_t period = (((uint16_t)((*data)&0x0F))<<8) | (uint16_t)(*(data+1));
@@ -466,8 +469,12 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     {
       if(tempsam)
       {
+        /*if (c->sample != gm->samples[tempsam])
+        {
+          c->funkpos = 0;
+        }*/
         //printw("%2x ", tempsam);
-        //c->funkpos = 0;
+        
         c->stop = false;
         tempsam--;
         if(tempeffect != 0x03 && tempeffect != 0x05) c->offset = 0;
@@ -492,8 +499,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->index = c->offset;
           c->stop = false;
           c->repeat = false;
-          /*if(!(c->vibwave & 4)) c->vibpos = 0;
-          if(!(c->tremwave & 4)) c->trempos = 0;*/
           c->vibpos = 0;
           c->trempos = 0;
         }
@@ -520,8 +525,18 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           uint8_t step1 = base+((effectdata>>4)&0x0F);
           uint8_t step2 = base+(effectdata&0x0F);
           c->arp[0] = c->period;
-          c->arp[1] = periods[step1>35?35:step1];
-          c->arp[2] = periods[step2>35?35:step2];
+          if(step1 > 35)
+          {
+            if(step1 == 36) c->arp[1] = 0;
+            else c->arp[1] = periods[(step1-1)%36];
+          }
+          else c->arp[1] = periods[step1];
+          if(step2 > 35)
+          {
+            if(step2 == 36) c->arp[2] = 0;
+            else c->arp[2] = periods[(step2-1)%36];
+          }
+          else c->arp[2] = periods[step2];
         }
         break;
 
@@ -532,11 +547,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       case 0x04: //vibrato
         if(effectdata & 0x0F) c->vibdepth = effectdata & 0x0F;
         if(effectdata & 0xF0) c->vibspeed = (effectdata >> 4) & 0x0F;
-        /*Check this
-        c->period = c->portdest;
-        c->tempperiod = c->period;
-        Seriously*/
-        //if(c->vibwave&4) c->vibpos = 0;
         break;
       
       case 0x07: //tremolo
@@ -545,7 +555,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->tremdepth = effectdata & 0x0F;
           c->tremspeed = (effectdata >> 4) & 0x0F;
         }
-        //if(c->tremwave&4) c->trempos = 0;
         break;
 
       case 0x0B: //position jump
@@ -568,7 +577,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         row = (effectdata>>4)*10+(effectdata&0x0F);
         patternset = true;
         if(addflag) row++; //emulate protracker EEx + Dxx bug
-        //if(!offset && !overwrite) patternset = false;
         break;
   
       case 0x0E:
@@ -638,7 +646,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       c->stop = true;
   }
   else if (c->deltick == 0) processnoteeffects(c, data);
-  //if(c->deltick) c->deltick--;
   if(c->retrig && globaltick == c->retrig-1)
   {
     c->index = 0;
@@ -800,7 +807,6 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
       s->repeatlength |= (uint16_t)*(filearr+49+(30*i));
 
       int copylen = (s->length)*2;
-      s->inverted = false;
       //s->sampledata = malloc(copylen*sizeof(float));
       s->sampledata = malloc(copylen*sizeof(int8_t));
 
