@@ -24,11 +24,11 @@ uint16_t periods[] = {
   214,202,190,180,170,160,151,143,135,127,120,113};
 
 char* notes[] = {
-  "C-1", "C#1", "D-1", "D#1", "E-1", "F-1", 
-  "F#1", "G-1", "G#1", "A-1", "A#1", "B-1", 
-  "C-2", "C#2", "D-2", "D#2", "E-2", "F-2", 
+  "C-1", "C#1", "D-1", "D#1", "E-1", "F-1",
+  "F#1", "G-1", "G#1", "A-1", "A#1", "B-1",
+  "C-2", "C#2", "D-2", "D#2", "E-2", "F-2",
   "F#2", "G-2", "G#2", "A-2", "A#2", "B-2",
-  "C-3", "C#3", "D-3", "D#3", "E-3", "F-3", 
+  "C-3", "C#3", "D-3", "D#3", "E-3", "F-3",
   "F#3", "G-3", "G#3", "A-3", "A#3", "B-3"};
 
 uint8_t funktable[] = {
@@ -148,7 +148,7 @@ int findperiod(uint16_t period)
     else upper = mid-1;
   }
   return -1;
-  /*for(int i = 0; i < 36; i++) 
+  /*for(int i = 0; i < 36; i++)
     if(periods[i] == period) return i;
   //printw("PERIOD TABLE LOOKUP ERROR: %d\n", period);
   return -1;*/
@@ -176,7 +176,7 @@ void libsrcerror(int err)
 void portaudioerror(int err)
 {
   printw("PortAudio error: %s\n", Pa_GetErrorText(err));
-  abort(); 
+  abort();
 }
 
 void precalculatetables()
@@ -253,12 +253,12 @@ channel* initsound()
     delcount = 0;
     globaltick = 0;
     addflag = false;
-  }         
+  }
   //open the audio stream
   pa_error = Pa_OpenDefaultStream(&stream, 0, 2, paFloat32, SAMPLE_RATE,
                                   paFramesPerBufferUnspecified, NULL,
                                   audiobuf);
-  
+
   if(pa_error != paNoError) portaudioerror(pa_error);
   return channels;
 }
@@ -284,7 +284,7 @@ void renderpattern(uint8_t* patterndata)
       //tempsam = tempsam;
       //if(period) sprintf((displaypatterns+49*line+chan*12), "%03x ", period);
       if(period)
-        sprintf((displaypatterns+48*line+chan*12), "%s ", 
+        sprintf((displaypatterns+48*line+chan*12), "%s ",
           notes[findperiod(period)]);
       else sprintf((displaypatterns+48*line+chan*12), "    ");
       if(tempsam) sprintf((displaypatterns+48*line+chan*12+4),
@@ -371,7 +371,7 @@ void processnoteeffects(channel* c, uint8_t* data)
       //exploit fallthrough
 
     case 0x04: //vibrato
-      c->tempperiod = c->period + 
+      c->tempperiod = c->period +
         ((c->vibdepth*waves[c->vibwave&3][c->vibpos])>>7);
       c->vibpos += c->vibspeed;
       c->vibpos %= 64;
@@ -423,7 +423,7 @@ void processnoteeffects(channel* c, uint8_t* data)
         //There's no effect 0xE8 (is 8 evil or something?)
 
         case 0x90: //retrigger note + x vblanks (ticks)
-          if(((effectdata&0x0F) == 0) || 
+          if(((effectdata&0x0F) == 0) ||
             (globaltick % (effectdata&0x0F)) == 0) c->index = c->offset;
           break;
 
@@ -452,7 +452,7 @@ void processnoteeffects(channel* c, uint8_t* data)
   }
 }
 
-void processnote(channel* c, uint8_t* data, uint8_t offset, 
+void processnote(channel* c, uint8_t* data, uint8_t offset,
                  bool overwrite)
 {
   uint8_t tempeffect = *(data+2)&0x0F;
@@ -474,7 +474,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->funkpos = 0;
         }*/
         //printw("%2x ", tempsam);
-        
+
         c->stop = false;
         tempsam--;
         if(tempeffect != 0x03 && tempeffect != 0x05) c->offset = 0;
@@ -548,7 +548,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         if(effectdata & 0x0F) c->vibdepth = effectdata & 0x0F;
         if(effectdata & 0xF0) c->vibspeed = (effectdata >> 4) & 0x0F;
         break;
-      
+
       case 0x07: //tremolo
         if(effectdata)
         {
@@ -578,7 +578,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         patternset = true;
         if(addflag) row++; //emulate protracker EEx + Dxx bug
         break;
-  
+
       case 0x0E:
       {
         switch(effectdata&0xF0)
@@ -595,7 +595,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
           case 0x60: //jump to loop, play x times
             if(!(effectdata & 0x0F)) c->looppoint = row;
-            else if(effectdata & 0x0F) 
+            else if(effectdata & 0x0F)
             {
               if(c->loopcount == -1)
               {
@@ -665,7 +665,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   else if(c->tempvolume > 64) c->tempvolume = 64;
   if(c->tempperiod > 856) c->tempperiod = 856;
   else if(c->tempperiod < 113) c->tempperiod = 113;
-  
+
   //write empty frame
   c->cdata->output_frames = ticktime*SAMPLE_RATE;
   if(c->stop)
@@ -704,7 +704,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
     for(int i = 0; i < ticktime*rate-1; i++)
     {
-      c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f 
+      c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f
         * c->tempvolume/64.0 * 0.4f;
 
       if(c->repeat && (c->index >= (c->sample->repeatlength)*2
@@ -733,7 +733,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   }
   libsrc_error = src_process(c->converter, c->cdata);
   if(libsrc_error) libsrcerror(libsrc_error);
-  
+
   if(c->cdata->output_frames_gen != c->cdata->output_frames)
   {
     for(int k = c->cdata->output_frames_gen; k < c->cdata->output_frames; k++)
@@ -769,7 +769,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
 void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 {
-  
+
   for(int i = 0; i < numsamples; i++)
   {
     sample* s = malloc(sizeof(sample));
@@ -822,7 +822,7 @@ void sampleparse(modfile* m, uint8_t* filearr, uint32_t start)
 void steptick(channel* cp)
 {
   if(row == 64)
-  { 
+  {
     row = 0;
     if(pattern == curpattern) pattern++;
     /*if(pattern < gm->songlength)
@@ -852,7 +852,7 @@ void steptick(channel* cp)
 
   if(globaltick == 0)
   {
-    mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  tempo: %d\n", 
+    mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  tempo: %d\n",
       pattern, gm->patternlist[pattern], row, gm->speed, gm->tempo);
     if(pattern != curpattern)
       renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);
@@ -872,7 +872,7 @@ void steptick(channel* cp)
     box(patternwin, 0, 0);
     wrefresh(patternwin);
     refresh();
-    
+
     patternset = false;
     curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
     currow = row;
@@ -924,13 +924,13 @@ modfile* modparse(FILE* f)
   //printw("%s\n", m->name);
   memcpy(m->magicstring, filearr+1080, 4);
   m->magicstring[4] = '\x00';
-  if(strcmp(m->magicstring, "M.K.") && strcmp(m->magicstring, "4CHN")) 
-  { 
+  if(strcmp(m->magicstring, "M.K.") && strcmp(m->magicstring, "4CHN"))
+  {
     printw("Warning: Not a 31 instrument 4 channel MOD file. May not be playable.\n");
     type = 1;
   }
   else type = 0;
-  
+
   numsamples = type?15:31;
   //printw("magic string%s\n", m->magicstring);
   if (type == 0) m->songlength = filearr[950];
@@ -999,13 +999,19 @@ int main(int argc, char *argv[])
   if(filelength <= 0) goto fileerror;
   fseek(f, 0L,SEEK_SET);
   initscr();
+  start_color();
   curs_set(0);
+  init_pair(1, COLOR_RED, COLOR_BLACK);
+  attron(COLOR_PAIR(1));
   printw("MFoP 1.1.3: A tiny ProTracker MOD player\nBaked with love\n");
+  attroff(COLOR_PAIR(1));
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  attron(COLOR_PAIR(2));
   refresh();
   patternwin = newwin(20, 49, 5, 0);
   //instrwin = newwin()
   box(patternwin, 0, 0);
-
+  wcolor_set(patternwin, COLOR_PAIR(2), NULL);
   //allocate buffer for pattern viewer (includes null byte at end of line)
   displaypatterns = malloc(3136*sizeof(char));
   gm = modparse(f);
@@ -1044,8 +1050,8 @@ int main(int argc, char *argv[])
         break;
       }
       if(pause) goto input_loop;
-      
-    //break; 
+
+    //break;
     steptick(gcp);
     if(headphones)
     {
@@ -1062,7 +1068,7 @@ int main(int argc, char *argv[])
     }
     else
       pa_error = Pa_WriteStream(stream, audiobuf, ticktime*SAMPLE_RATE);
-    
+
     if(pa_error != paNoError && pa_error != paOutputUnderflowed)
       portaudioerror(pa_error);
   }
