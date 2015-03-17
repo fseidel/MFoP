@@ -1003,11 +1003,11 @@ int main(int argc, char *argv[])
   initscr();
   start_color();
   curs_set(0);
-  init_pair(1, COLOR_RED, COLOR_BLACK);
+  init_pair(1, COLOR_YELLOW, COLOR_BLACK);
   attron(COLOR_PAIR(1));
   printw("MFoP 1.1.3: A tiny ProTracker MOD player\nBaked with love\n");
   attroff(COLOR_PAIR(1));
-  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  init_pair(2, COLOR_BLUE, COLOR_BLACK);
   attron(COLOR_PAIR(2));
   refresh();
   patternwin = newwin(20, 49, 5, 0);
