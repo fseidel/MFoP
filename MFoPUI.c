@@ -1011,7 +1011,9 @@ int main(int argc, char *argv[])
   patternwin = newwin(20, 49, 5, 0);
   //instrwin = newwin()
   box(patternwin, 0, 0);
+  init_pair(5, COLOR_BLACK, COLOR_WHITE);
   wcolor_set(patternwin, COLOR_PAIR(2), NULL);
+  wattron(patternwin, COLOR_PAIR(5));
   //allocate buffer for pattern viewer (includes null byte at end of line)
   displaypatterns = malloc(3136*sizeof(char));
   gm = modparse(f);
@@ -1026,7 +1028,13 @@ int main(int argc, char *argv[])
 
   curdata = gm->patterns + ((gm->patternlist[pattern])*1024) + (16*row);
   renderpattern(gm->patterns + gm->patternlist[pattern]*1024);
+  init_pair(3, COLOR_WHITE, COLOR_BLACK);
+  attroff(COLOR_PAIR(2));
+  attron(COLOR_PAIR(3));
   mvprintw(3, 0, "Title: %s", gm->name);
+  attroff(COLOR_PAIR(3));
+  attron(COLOR_PAIR(2));
+
   noecho();
   bool pause = false;
   nodelay(stdscr, true);
@@ -1097,6 +1105,9 @@ int main(int argc, char *argv[])
   if(pa_error != paNoError) portaudioerror(pa_error);
   pa_error = Pa_Terminate();
   if(pa_error != paNoError) portaudioerror(pa_error);
+  attroff(COLOR_PAIR(1));
+  attroff(COLOR_PAIR(2));
+  attroff(COLOR_PAIR(5));
   endwin();
   return 0;
 
