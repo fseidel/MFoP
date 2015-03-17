@@ -852,6 +852,7 @@ void steptick(channel* cp)
 
   if(globaltick == 0)
   {
+    attron(COLOR_PAIR(3));
     mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  tempo: %d\n",
       pattern, gm->patternlist[pattern], row, gm->speed, gm->tempo);
     if(pattern != curpattern)
@@ -884,6 +885,7 @@ void steptick(channel* cp)
     gm->speed = nextspeed;
     gm->tempo = nexttempo;
     ticktime = nextticktime;
+    attroff(COLOR_PAIR(3));
   }
 
 
