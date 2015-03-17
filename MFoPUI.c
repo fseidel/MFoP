@@ -284,8 +284,14 @@ void renderpattern(uint8_t* patterndata)
       //tempsam = tempsam;
       //if(period) sprintf((displaypatterns+49*line+chan*12), "%03x ", period);
       if(period)
-        sprintf((displaypatterns+48*line+chan*12), "%s ",
-          notes[findperiod(period)]);
+      {
+        char* notestr;
+        int8_t noteid = findperiod(period);
+        if(noteid == -1) notestr = "???";
+        else notestr = notes[noteid];
+        sprintf((displaypatterns+48*line+chan*12), "%s ", 
+          notestr);
+      }
       else sprintf((displaypatterns+48*line+chan*12), "    ");
       if(tempsam) sprintf((displaypatterns+48*line+chan*12+4),
         "%2X ", tempsam);
