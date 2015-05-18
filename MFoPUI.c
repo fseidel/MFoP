@@ -118,6 +118,7 @@ typedef struct{
   int8_t loopcount;
   uint16_t offset;
   uint16_t offsetmem;
+  float error;
 } channel;
 
 typedef struct{
@@ -209,6 +210,7 @@ channel* initsound()
   audiobuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   for(int i = 0; i < 4; i++)
   {
+    channels[i].error = 0;
     channels[i].volume = 0;
     channels[i].tempvolume = 0;
     channels[i].deltick = 0;
@@ -480,7 +482,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->funkpos = 0;
         }*/
         //printw("%2x ", tempsam);
-
+        c->error = 0;
         c->stop = false;
         tempsam--;
         if(tempeffect != 0x03 && tempeffect != 0x05) c->offset = 0;
@@ -507,6 +509,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
           c->repeat = false;
           c->vibpos = 0;
           c->trempos = 0;
+          c->error = 0;
         }
         c->portdest = period;
         //c->arp[0] = c->period;
@@ -695,11 +698,6 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     if(libsrc_error) libsrcerror(libsrc_error);
     c->cdata->input_frames = ticktime*rate;
 
-    //add fractional part of rate calculation to account for error
-    //c->offset += rate*ticktime - (uint32_t)(rate*ticktime);
-    //c->index += c->offset;
-    //c->offset -= (uint32_t)(c->offset);
-
     c->funkcounter += c->funkspeed;
     if(c->funkcounter >= 128)
     {
@@ -729,13 +727,17 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         {
           //float last = c->buffer[i];
           for(int j = i+1; j < ticktime*rate-1; j++)
-            c->buffer[j] = 0.0f;
+            c->buffer[j] = 0;
           c->stop = true;
           break;
         }
         //c->index = restore;
       }
     }
+    //add fractional part of rate calculation to account for error
+    /*c->error += rate*ticktime - (uint32_t)(rate*ticktime);
+    c->index += c->error;
+    c->error -= (uint32_t)(c->error);*/
   }
   libsrc_error = src_process(c->converter, c->cdata);
   if(libsrc_error) libsrcerror(libsrc_error);
@@ -859,7 +861,7 @@ void steptick(channel* cp)
   if(globaltick == 0)
   {
     attron(COLOR_PAIR(3));
-    mvprintw(4, 0, "position: 0x%02x  pattern: 0x%02x  row: 0x%02x  speed: 0x%02x  tempo: %d\n",
+    mvprintw(4, 0, "position: 0x%02X  pattern: 0x%02X  row: 0x%02X  speed: 0x%02X  tempo: %d\n",
       pattern, gm->patternlist[pattern], row, gm->speed, gm->tempo);
     if(pattern != curpattern)
       renderpattern(gm->patterns + 1024*gm->patternlist[pattern]);
@@ -1011,7 +1013,7 @@ int main(int argc, char *argv[])
   curs_set(0);
   init_pair(1, COLOR_YELLOW, COLOR_BLACK);
   attron(COLOR_PAIR(1));
-  printw("MFoP 1.1.3: A tiny ProTracker MOD player\nBaked with love\n");
+  printw("MFoP 1.1.4: A tiny ProTracker MOD player\nBaked with love\n");
   attroff(COLOR_PAIR(1));
   init_pair(2, COLOR_BLUE, COLOR_BLACK);
   attron(COLOR_PAIR(2));
