@@ -204,10 +204,10 @@ channel* initsound()
   pa_error = Pa_Initialize();
   if(pa_error != paNoError) portaudioerror(pa_error);
   channel* channels = malloc(4*sizeof(channel));
-  mixbuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float)+8);
+  mixbuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   //buffs[1] = malloc(0.02*2*SAMPLE_RATE*sizeof(float));
   //curbuf = 0;
-  audiobuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float)+8);
+  audiobuf = malloc(0.08*2*SAMPLE_RATE*sizeof(float));
   for(int i = 0; i < 4; i++)
   {
     channels[i].error = 0;
@@ -215,9 +215,9 @@ channel* initsound()
     channels[i].tempvolume = 0;
     channels[i].deltick = 0;
     channels[i].increment = 0.0f;
-    channels[i].buffer = malloc(PAL_CLOCK*sizeof(float)+1);
+    channels[i].buffer = malloc(PAL_CLOCK*sizeof(float));
     //channels[i].output = malloc(1024*sizeof(float));
-    channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float)+8);
+    channels[i].resampled = malloc(0.08*SAMPLE_RATE*sizeof(float));
     channels[i].stop = true;
     channels[i].repeat = false;
     //channels[i].arp = malloc(3*sizeof(uint16_t));
@@ -666,7 +666,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
 
   //RESAMPLE PER TICK
 
-  int writesize = SAMPLE_RATE*ticktime+8;
+  int writesize = SAMPLE_RATE*ticktime;
   if(c->volume < 0) c->volume = 0;
   else if(c->volume > 64) c->volume = 64;
 
@@ -676,16 +676,16 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
   else if(c->tempperiod < 113) c->tempperiod = 113;
 
   //write empty frame
-  c->cdata->output_frames = writesize;
+  c->cdata->output_frames = ticktime*SAMPLE_RATE;
   if(c->stop)
   {
     conv_ratio = 1.0;
     c->cdata->src_ratio = conv_ratio;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
     if(libsrc_error) libsrcerror(libsrc_error);
-    c->cdata->input_frames = writesize;
+    c->cdata->input_frames = ticktime*SAMPLE_RATE;
     //c->rate = SAMPLE_RATE;
-    for(int i = 0; i < writesize; i++)
+    for(int i = 0; i < ticktime*SAMPLE_RATE; i++)
       c->buffer[i] = 0.0f;
   }
   //write non-empty frame to buffer to be interpolated
@@ -696,7 +696,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
     c->cdata->src_ratio = conv_ratio;
     libsrc_error = src_set_ratio(c->converter, conv_ratio);
     if(libsrc_error) libsrcerror(libsrc_error);
-    c->cdata->input_frames = ticktime*rate+1;
+    c->cdata->input_frames = ticktime*rate;
 
     c->funkcounter += c->funkspeed;
     if(c->funkcounter >= 128)
@@ -706,7 +706,7 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
       c->funkpos = (c->funkpos+1) % (c->sample->repeatlength*2);
     }
 
-    for(int i = 0; i < ticktime*rate; i++)
+    for(int i = 0; i < ticktime*rate-1; i++)
     {
       c->buffer[i] = (float)c->sample->sampledata[c->index++]/128.0f
         * c->tempvolume/64.0 * 0.4f;
@@ -726,8 +726,8 @@ void processnote(channel* c, uint8_t* data, uint8_t offset,
         else
         {
           //float last = c->buffer[i];
-          for(int j = i+1; j < ticktime*rate; j++)
-            c->buffer[j] = 0.0f;
+          for(int j = i+1; j < ticktime*rate-1; j++)
+            c->buffer[j] = 0;
           c->stop = true;
           break;
         }
@@ -1013,7 +1013,7 @@ int main(int argc, char *argv[])
   curs_set(0);
   init_pair(1, COLOR_YELLOW, COLOR_BLACK);
   attron(COLOR_PAIR(1));
-  printw("MFoP 1.1.5: A tiny ProTracker MOD player\nBaked with love\n");
+  printw("MFoP 1.1.4: A tiny ProTracker MOD player\nBaked with love\n");
   attroff(COLOR_PAIR(1));
   init_pair(2, COLOR_BLUE, COLOR_BLACK);
   attron(COLOR_PAIR(2));
