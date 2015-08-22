@@ -9,12 +9,12 @@ INCLUDES=-I/opt/local/include
 LIBS=-L/opt/local/lib
 RM=/bin/rm -f
 
-all: MFoP MFoPUI
+all: MFoP
 
+#MFoP:
+#	$(CC) $(CFLAGS) $(INCLUDES) $(LIBS) -lsamplerate -lportaudio MFoP.c -o MFoP
 MFoP:
-	$(CC) $(CFLAGS) $(INCLUDES) $(LIBS) -lsamplerate -lportaudio MFoP.c -o MFoP
-MFoPUI:
-	$(CC) $(CFLAGS) $(INCLUDES) $(LIBS) -lncurses -lsamplerate -lportaudio MFoPUI.c -o MFoPUI
+	$(CC) $(CFLAGS) $(INCLUDES) $(LIBS) -lncurses -lsamplerate -lportaudio MFoP.c -o MFoP
 
 clean:
-	$(RM) MFoP MFoPUI
+	$(RM) MFoP
