@@ -4,7 +4,7 @@ MfoP_old.c
 /MFoPUI
 /build.sh
 /buildUI.sh
-MFoP.dSYM/
+/MFoP.dSYM
 MFoPUI.dSYM/Contents/Info.plist
 
 MFoPUI.dSYM/Contents/Resources/DWARF/MFoPUI
