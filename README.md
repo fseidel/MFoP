@@ -9,7 +9,7 @@ You'll need to build MFoP with PortAudio and libsamplerate.
 
 To build: 
 ```
-gcc [portaudio path] [libsrc path] -std=c99 -pedantic -Wall -Werror -Wextra MFoP.c -o MFoP -O3
+make
 ```
 
 To use:
