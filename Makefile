@@ -5,8 +5,8 @@ else
 endif
 
 CFLAGS=-std=c99 -pedantic -Wall -Werror -Wextra -O3
-INCLUDES=-I/opt/local/include
-LIBS=-L/opt/local/lib
+INCLUDES=-I/usr/local/include
+LIBS=-L/usr/local/lib
 RM=/bin/rm -f
 
 all: MFoP
